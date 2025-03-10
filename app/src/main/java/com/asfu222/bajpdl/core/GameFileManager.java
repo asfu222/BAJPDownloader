@@ -17,6 +17,7 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -80,7 +81,7 @@ public class GameFileManager {
 
         // Get all catalog entries and sort by size (process smaller files first)
         List<Map.Entry<String, CommonCatalogItem>> sortedEntries = catalog.entrySet().stream()
-              //  .sorted(Comparator.comparingLong(e -> e.getValue().size))
+                .sorted(Comparator.comparingLong(e -> e.getValue().size))
                 .collect(Collectors.toList());
 
         // Batch size and failure tracking
