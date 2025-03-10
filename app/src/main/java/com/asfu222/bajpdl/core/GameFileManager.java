@@ -82,7 +82,7 @@ public class GameFileManager {
                 .collect(Collectors.toList());
 
         // Batch size and failure tracking
-        final int BATCH_SIZE = 50; // Smaller batch size
+        final int BATCH_SIZE = 10; // Smaller batch size
         AtomicInteger currentIndex = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
 
