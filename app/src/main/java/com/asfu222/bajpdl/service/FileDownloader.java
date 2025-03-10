@@ -26,6 +26,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 public class FileDownloader {
@@ -42,68 +44,62 @@ public class FileDownloader {
     }
 
     public CompletableFuture<Path> downloadFile(Path basePath, String relPath,
-                                                Function<Path, Boolean> verifier, boolean replace) {
+                                                Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler) {
         return CompletableFuture.supplyAsync(() -> {
             int attempts = 5;
             int delay = 5000; // 5 seconds
-
             for (int i = 0; i < attempts; i++) {
-                Path result = tryDownloadFromAllSources(basePath, relPath, verifier, replace);
+                Path result = null;
+                try {
+                    result = tryDownloadFromAllSources(basePath, relPath, verifier, replace);
+                } catch (IOException e) {
+                    handler.accept("Error downloading " + relPath, e);
+                }
                 if (result != null) {
                     return result;
                 }
-
                 try {
                     Thread.sleep(delay);
                 } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    return null;
+                    handler.accept("Error downloading " + relPath, e);
                 }
             }
-            System.err.println("All download attempts failed for: " + relPath);
+
             return null;
         }, executorService);
     }
 
     private Path tryDownloadFromAllSources(Path basePath, String relPath,
-                                           Function<Path, Boolean> verifier, boolean replace) {
+                                           Function<Path, Boolean> verifier, boolean replace) throws IOException {
         List<String> serverUrls = appConfig.getServerUrls();
 
         // Try primary servers first
         for (String baseUrl : serverUrls) {
-            try {
-                String fileUrl = baseUrl + "/" + relPath;
-                if (serverAvailable.get(baseUrl).contains(relPath)) {
-                    Path downloadedFile = downloadSingleFile(fileUrl,
-                            basePath.resolve(relPath), verifier, replace);
+            String fileUrl = baseUrl + "/" + relPath;
+            if (serverAvailable.get(baseUrl).contains(relPath)) {
+                Path downloadedFile = downloadSingleFile(fileUrl,
+                        basePath.resolve(relPath), verifier, replace);
 
-                    if (verifier.apply(downloadedFile)) {
-                        return downloadedFile;
-                    }
-
-                    // Delete invalid file
-                    Files.deleteIfExists(downloadedFile);
+                if (verifier.apply(downloadedFile)) {
+                    return downloadedFile;
                 }
-            } catch (IOException e) {
-                System.err.println("Error downloading from " + baseUrl + ": " + e.getMessage());
+
+                // Delete invalid file
+                Files.deleteIfExists(downloadedFile);
             }
         }
 
         // Try fallback server as last resort
-        try {
-            String fallbackUrl = appConfig.getFallbackUrl() + "/" + relPath;
-            Path downloadedFile = downloadSingleFile(fallbackUrl,
-                    basePath.resolve(relPath), verifier, replace);
+        String fallbackUrl = appConfig.getFallbackUrl() + "/" + relPath;
+        Path downloadedFile = downloadSingleFile(fallbackUrl,
+                basePath.resolve(relPath), verifier, replace);
 
-            if (verifier.apply(downloadedFile)) {
-                return downloadedFile;
-            }
-
-            // Delete invalid file
-            Files.deleteIfExists(downloadedFile);
-        } catch (IOException e) {
-            System.err.println("Error downloading from fallback: " + e.getMessage());
+        if (verifier.apply(downloadedFile)) {
+            return downloadedFile;
         }
+
+        // Delete invalid file
+        Files.deleteIfExists(downloadedFile);
 
         return null;
     }

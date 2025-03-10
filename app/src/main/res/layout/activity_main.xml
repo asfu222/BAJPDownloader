@@ -24,6 +24,13 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="Download custom only (no official)" />
+		
+	<EditText
+        android:id="@+id/batchSizeInput"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Batch Size"
+        android:inputType="number" />
 
 	<LinearLayout
 		android:layout_width="match_parent"

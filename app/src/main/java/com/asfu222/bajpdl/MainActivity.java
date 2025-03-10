@@ -105,6 +105,23 @@ public class MainActivity extends AppCompatActivity {
             return false;
         });
 
+        EditText batchSizeInput = findViewById(R.id.batchSizeInput);
+
+        // Set the current batch size from AppConfig
+        batchSizeInput.setText(String.valueOf(gameFileManager.getAppConfig().getBatchSize()));
+
+        // Save the batch size when the user finishes editing
+        batchSizeInput.setOnEditorActionListener((v, actionId, event) -> {
+            if (actionId == EditorInfo.IME_ACTION_DONE) {
+                int batchSize = Math.max(Integer.parseInt(batchSizeInput.getText().toString()), 1);
+                gameFileManager.getAppConfig().setBatchSize(batchSize);
+                gameFileManager.getAppConfig().saveConfig();
+                hideKeyboard();
+                return true;
+            }
+            return false;
+        });
+
         setupShizuku();
     }
 
