@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.Set;
 import java.util.zip.CRC32;
 
@@ -71,7 +72,7 @@ public abstract class FileUtils {
             if (!Files.exists(newPath.getParent())) {
                 Files.createDirectories(newPath.getParent());
             }
-            Files.copy(file, newPath);
+            Files.copy(file, newPath, StandardCopyOption.REPLACE_EXISTING);
         } else {
             try {
                 // Make sure service is connected
