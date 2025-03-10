@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId = "com.asfu222.bajpdl"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
@@ -32,6 +32,10 @@ android {
 }
 
 dependencies {
+    implementation(libs.lz4.java)
+    implementation(libs.json)
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
 
     implementation(libs.appcompat)
     implementation(libs.material)
