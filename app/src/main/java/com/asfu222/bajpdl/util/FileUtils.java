@@ -37,9 +37,9 @@ public abstract class FileUtils {
         return crc32.getValue();
     }
 
-    public static long calculateHash64(String name) {
-        byte[] data = name.getBytes();
-        return xxHash64.hash(data, 0, data.length, 0);
+    public static String calculateHash64(String name) {
+        byte[] data = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        return Long.toUnsignedString(xxHash64.hash(data, 0, data.length, 0));
     }
 
     public static long getSize(Path file) throws IOException {
