@@ -81,7 +81,7 @@ public class GameFileManager {
 
         // Get all catalog entries and sort by size (process smaller files first)
         List<Map.Entry<String, CommonCatalogItem>> sortedEntries = catalog.entrySet().stream()
-                .sorted(Comparator.comparingLong(e -> e.getValue().size))
+                .sorted((e1, e2) -> Long.compare(e2.getValue().size, e1.getValue().size)) // Largest first
                 .collect(Collectors.toList());
 
         // Batch size and failure tracking

@@ -47,14 +47,16 @@ public abstract class FileUtils {
     }
 
     public static String mapToInGamePath(String urlPath) {
+        String fileName = urlPath.substring(urlPath.lastIndexOf("/") + 1);
+
         if (urlPath.startsWith("Android/")) {
-            return urlPath.replaceFirst("Android/", "AssetBundls/");
+            return "AssetBundls/" + fileName;
         } else if (urlPath.startsWith("MediaResources/")) {
-            return urlPath.replaceFirst("MediaResources/", "MediaPatch/");
+            return "MediaPatch/" + fileName;
         }
+
         return urlPath;
     }
-
 
     private static final Set<String> STATIC_FILES = Set.of("TableCatalog.bytes", "MediaCatalog.bytes", "bundleDownloadInfo.json", "TableCatalog.hash", "MediaCatalog.hash", "bundleDownloadInfo.hash");
 
