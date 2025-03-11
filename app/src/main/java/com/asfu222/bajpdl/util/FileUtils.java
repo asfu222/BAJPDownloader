@@ -52,6 +52,9 @@ public abstract class FileUtils {
         if (urlPath.startsWith("Android/")) {
             return "AssetBundls/" + fileName;
         } else if (urlPath.startsWith("MediaResources/")) {
+            if (fileName.startsWith("MediaCatalog")) {
+                return "MediaPatch/Catalog/" + fileName;
+            }
             return "MediaPatch/" + fileName;
         }
 
