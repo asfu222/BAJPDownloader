@@ -262,23 +262,23 @@ public class GameFileManager {
 
     public void startReplacements() {
         try (var paths = Files.walk(dataPath)) {
-            paths
-                .filter(Files::isRegularFile)
-                .forEach(file -> CompletableFuture.runAsync(() -> {
-                    try {
-                        String urlPath = dataPath.relativize(file).toString();
-                        FileUtils.copyToGame(file, urlPath);
-                        log("Successfully copied file to game: " + urlPath);
-                    } catch (IOException e) {
-                        logError("Error copying file to game", e);
-                    }
-                }));
+            CompletableFuture.allOf(paths
+                            .filter(Files::isRegularFile)
+                            .map(file -> CompletableFuture.runAsync(() -> {
+                                try {
+                                    String urlPath = dataPath.relativize(file).toString();
+                                    FileUtils.copyToGame(file, urlPath);
+                                    log("Successfully copied file to game: " + urlPath);
+                                } catch (IOException e) {
+                                    logError("Error copying file to game", e);
+                                }
+                            })).toArray(CompletableFuture[]::new))
+                    .thenRun(() -> log("Done copying all files"));
         } catch (IOException ex) {
             logError("Error walking directory", ex);
         }
-        log("Done copying files to game");
     }
-
+    
     public void shutdown() {
         fileDownloader.shutdown();
     }
