@@ -102,38 +102,41 @@ public class FileDownloader {
 
         return null;
     }
-    private Path downloadSingleFile(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace) throws IOException {
-        if (Files.exists(dest) && verifier.apply(dest) && !replace) {
-            return dest;
-        }
-        HttpURLConnection connection = null;
-        try {
-            URL url = new URL(fileUrl);
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setConnectTimeout(CONNECTION_TIMEOUT);
-            connection.setReadTimeout(READ_TIMEOUT);
-
-            Files.createDirectories(dest.getParent());
-
-            try (InputStream in = new BufferedInputStream(connection.getInputStream());
-                 OutputStream out = new BufferedOutputStream(Files.newOutputStream(dest,
-                         replace ? StandardOpenOption.CREATE : StandardOpenOption.CREATE_NEW))) {
-
-                byte[] buffer = new byte[8192];
-                int bytesRead;
-                while ((bytesRead = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, bytesRead);
-                }
-                return dest;
-            } catch (FileAlreadyExistsException e) {
-                return dest; // Return existing file
-            }
-        } finally {
-            if (connection != null) {
-                connection.disconnect();
-            }
+private Path downloadSingleFile(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace) throws IOException {
+    if (Files.exists(dest)) {
+        if (verifier.apply(dest) && !replace) {
+            return dest; // File exists and is valid; return it.
+        } else {
+            Files.delete(dest); // Delete file if it's invalid or if replace is true.
         }
     }
+
+    HttpURLConnection connection = null;
+    try {
+        URL url = new URL(fileUrl);
+        connection = (HttpURLConnection) url.openConnection();
+        connection.setConnectTimeout(CONNECTION_TIMEOUT);
+        connection.setReadTimeout(READ_TIMEOUT);
+
+        Files.createDirectories(dest.getParent());
+
+        try (InputStream in = new BufferedInputStream(connection.getInputStream());
+             OutputStream out = new BufferedOutputStream(Files.newOutputStream(dest, StandardOpenOption.CREATE))) {
+
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = in.read(buffer)) != -1) {
+                out.write(buffer, 0, bytesRead);
+            }
+            return dest;
+        }
+    } finally {
+        if (connection != null) {
+            connection.disconnect();
+        }
+    }
+}
+
     public CompletableFuture<Void> fetchServerAvailable() {
         return CompletableFuture.runAsync(() -> {
             for (String serverUrl : appConfig.getServerUrls()) {
