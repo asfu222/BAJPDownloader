@@ -28,6 +28,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 public class FileDownloader {
@@ -44,7 +45,7 @@ public class FileDownloader {
     }
 
     public CompletableFuture<Path> downloadFile(MediaFS basePath, String relPath,
-                                                Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler) {
+                                                BiFunction<MediaFS, Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler) {
         return CompletableFuture.supplyAsync(() -> {
             int attempts = 5;
             int delay = 5000; // 5 seconds
@@ -70,7 +71,7 @@ public class FileDownloader {
     }
 
     private Path tryDownloadFromAllSources(MediaFS basePath, String relPath,
-                                           Function<Path, Boolean> verifier, boolean replace) throws IOException {
+                                           BiFunction<MediaFS, Path, Boolean> verifier, boolean replace) throws IOException {
         List<String> serverUrls = appConfig.getServerUrls();
 
         // Try primary servers first
@@ -80,12 +81,12 @@ public class FileDownloader {
                 Path downloadedFile = downloadSingleFile(fileUrl,
                         basePath, relPath, verifier, replace);
 
-                if (verifier.apply(downloadedFile)) {
+                if (verifier.apply(basePath, downloadedFile)) {
                     return downloadedFile;
                 }
 
                 // Delete invalid file
-                Files.deleteIfExists(downloadedFile);
+                basePath.deleteIfExists(downloadedFile);
             }
         }
 
@@ -94,22 +95,22 @@ public class FileDownloader {
         Path downloadedFile = downloadSingleFile(fallbackUrl,
                 basePath, relPath, verifier, replace);
 
-        if (verifier.apply(downloadedFile)) {
+        if (verifier.apply(basePath, downloadedFile)) {
             return downloadedFile;
         }
 
         // Delete invalid file
-        Files.deleteIfExists(downloadedFile);
+        basePath.deleteIfExists(downloadedFile);
 
         return null;
     }
-private Path downloadSingleFile(String fileUrl, MediaFS basePath, String dest, Function<Path, Boolean> verifier, boolean replace) throws IOException {
+private Path downloadSingleFile(String fileUrl, MediaFS basePath, String dest, BiFunction<MediaFS, Path, Boolean> verifier, boolean replace) throws IOException {
     Path relDest = Paths.get(dest);
-    if (Files.exists(basePath.resolve(dest))) {
-        if (verifier.apply(basePath.resolve(dest)) && !replace) {
-            return basePath.resolve(dest); // File exists and is valid; return it.
+    if (basePath.exists(relDest)) {
+        if (verifier.apply(basePath, relDest) && !replace) {
+            return relDest; // File exists and is valid; return it.
         } else {
-            Files.delete(basePath.resolve(dest)); // Delete file if it's invalid or if replace is true.
+            basePath.deleteIfExists(relDest); // Delete file if it's invalid or if replace is true.
         }
     }
 
@@ -130,7 +131,7 @@ private Path downloadSingleFile(String fileUrl, MediaFS basePath, String dest, F
             while ((bytesRead = in.read(buffer)) != -1) {
                 out.write(buffer, 0, bytesRead);
             }
-            return basePath.resolve(dest);
+            return relDest;
         }
     } finally {
         if (connection != null) {

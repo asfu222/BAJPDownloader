@@ -23,11 +23,11 @@ public abstract class FileUtils {
     // Reusable buffer pool
     private static final ThreadLocal<byte[]> bufferPool = ThreadLocal.withInitial(() -> new byte[8192]);
 
-    public static long calculateCRC32(Path file) throws IOException {
+    public static long calculateCRC32(MediaFS basePath, Path file) throws IOException {
         byte[] buffer = bufferPool.get();
         CRC32 crc32 = new CRC32();
 
-        try (InputStream is = new BufferedInputStream(Files.newInputStream(file))) {
+        try (InputStream is = new BufferedInputStream(basePath.newInputStream(file))) {
             int bytesRead;
             while ((bytesRead = is.read(buffer)) != -1) {
                 crc32.update(buffer, 0, bytesRead);
@@ -40,10 +40,6 @@ public abstract class FileUtils {
     public static String calculateHash64(String name) {
         byte[] data = name.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         return Long.toUnsignedString(xxHash64.hash(data, 0, data.length, 0));
-    }
-
-    public static long getSize(Path file) throws IOException {
-        return Files.size(file);
     }
 
     public static String mapToInGamePath(String urlPath) {
@@ -63,12 +59,12 @@ public abstract class FileUtils {
 
     private static final Set<String> STATIC_FILES = Set.of("TableCatalog.bytes", "MediaCatalog.bytes", "bundleDownloadInfo.json", "TableCatalog.hash", "MediaCatalog.hash", "bundleDownloadInfo.hash");
 
-    public static void copyToGame(Path file, String urlPath) throws IOException {
+    public static void copyToGame(MediaFS basePath, Path file, String urlPath) throws IOException {
         Path gamePath = Paths.get("/storage/emulated/0/Android/data/com.YostarJP.BlueArchive/files/")
                 .resolve(mapToInGamePath(urlPath));
         String newName = file.getFileName().toString();
         if (!newName.endsWith(".bundle") && !STATIC_FILES.contains(newName)) {
-            newName = calculateHash64(newName) + "_" + calculateCRC32(file);
+            newName = calculateHash64(newName) + "_" + calculateCRC32(basePath, file);
         }
         Path newPath = gamePath.getParent().resolve(newName);
 

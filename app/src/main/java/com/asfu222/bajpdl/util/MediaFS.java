@@ -8,9 +8,13 @@ import androidx.documentfile.provider.DocumentFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * A wrapper to convert java.nio.file.Files operations to MediaStore operations based on relative paths.
@@ -36,17 +40,50 @@ public class MediaFS {
         }
     }
 
-    public Path createDirectories(Path path) {
+    public Path createDirectories(Path path) throws IOException {
         DocumentFile currentDir = rootDir;
 
         for (Path part : path) {
-            DocumentFile nextDir = currentDir.findFile(part.toString());
+            String dirName = part.toString();
+
+            // First try the efficient findFile method
+            DocumentFile nextDir = currentDir.findFile(dirName);
+
+            // If not found or not a directory, do a thorough manual search
             if (nextDir == null || !nextDir.isDirectory()) {
-                nextDir = currentDir.createDirectory(part.toString());
+                // Manually search through all children for an exact name match
+                DocumentFile[] files = currentDir.listFiles();
+                for (DocumentFile file : files) {
+                    if (file.isDirectory() && dirName.equals(file.getName())) {
+                        nextDir = file;
+                        break;
+                    }
+                }
             }
+
+            // If still not found, create new directory
+            if (nextDir == null) {
+                nextDir = currentDir.createDirectory(dirName);
+                if (nextDir == null) {
+                    throw new IOException("Failed to create directory: " + dirName);
+                }
+            } else if (!nextDir.isDirectory()) {
+                throw new IOException("A file with the same name exists: " + dirName);
+            }
+
             currentDir = nextDir;
         }
         return path;
+    }
+
+    public byte[] readAllBytes(Path path) {
+        try (InputStream is = newInputStream(path)) {
+            byte[] buffer = new byte[is.available()];
+            is.read(buffer);
+            return buffer;
+        } catch (IOException e) {
+            return new byte[0];
+        }
     }
 
     public void deleteIfExists(Path path) {
@@ -81,19 +118,44 @@ public class MediaFS {
         if (file != null) {
             file.delete();
         }
-        return appContext.getContentResolver().openOutputStream(currentDir.createFile("application/octet-stream", path.getFileName().toString()).getUri());
+        DocumentFile newFile = currentDir.createFile("application/octet-stream", path.getFileName().toString());
+
+        if (newFile != null && !newFile.getName().equals(path.getFileName().toString())) {
+            newFile.renameTo(path.getFileName().toString());
+        }
+        return appContext.getContentResolver().openOutputStream(newFile.getUri());
     }
 
+    public InputStream newInputStream(Path path) throws IOException {
+        DocumentFile currentDir = rootDir;
 
-    public Path resolve(Path path) {
-        Uri rootUri = rootDir.getUri();
-        String realPath = getRealPathFromUri(rootUri);
-        Path rootPath = Paths.get(realPath);
-        return rootPath.resolve(path);
+        for (Path part : path) {
+            DocumentFile nextDir = currentDir.findFile(part.toString());
+            if (nextDir == null || !nextDir.isDirectory()) {
+                throw new IOException("File does not exist: " + path);
+            }
+            currentDir = nextDir;
+        }
+
+        DocumentFile file = currentDir.findFile(path.getFileName().toString());
+        if (file == null) {
+            throw new IOException("File does not exist: " + path);
+        }
+        return appContext.getContentResolver().openInputStream(file.getUri());
     }
 
-    public Path resolve(String path) {
-        return resolve(Paths.get(path));
+    public boolean exists(Path path) {
+        DocumentFile currentDir = rootDir;
+
+        for (Path part : path) {
+            DocumentFile nextDir = currentDir.findFile(part.toString());
+            if (nextDir == null || !nextDir.isDirectory()) {
+                return false;
+            }
+            currentDir = nextDir;
+        }
+
+        return currentDir.findFile(path.getFileName().toString()) != null;
     }
 
     public Path toPath() {
@@ -119,5 +181,39 @@ public class MediaFS {
         }
 
         return realPath;
+    }
+
+    public Stream<Path> walk() {
+        List<Path> paths = new ArrayList<>();
+        walkDirectory(rootDir, paths);
+        return paths.stream();
+    }
+
+    private void walkDirectory(DocumentFile dir, List<Path> paths) {
+        for (DocumentFile file : dir.listFiles()) {
+            if (file.isDirectory()) {
+                walkDirectory(file, paths);
+            } else {
+                paths.add(Paths.get(getRealPathFromUri(file.getUri())));
+            }
+        }
+    }
+
+    public long size(Path file) {
+        DocumentFile currentDir = rootDir;
+
+        for (Path part : file) {
+            DocumentFile nextDir = currentDir.findFile(part.toString());
+            if (nextDir == null || !nextDir.isDirectory()) {
+                return 0;
+            }
+            currentDir = nextDir;
+        }
+
+        DocumentFile docFile = currentDir.findFile(file.getFileName().toString());
+        if (docFile == null) {
+            return 0;
+        }
+        return docFile.length();
     }
 }
