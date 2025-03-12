@@ -18,7 +18,6 @@ import android.widget.TextView;
 
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
-import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -149,7 +148,7 @@ public class MainActivity extends AppCompatActivity {
         if (!gameFileManager.getDataPath().isReady()) {
             requestDefaultDirectoryPermissions();
         }
-        setupShizuku();
+        setupEscalatedPermissions();
     }
 
 
@@ -189,7 +188,7 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
-    private void setupShizuku() {
+    private void setupEscalatedPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             updateConsole("Setting up Shizuku...");
 
@@ -204,11 +203,29 @@ public class MainActivity extends AppCompatActivity {
                 shizukuBinderReceived = true;
                 checkShizukuPermission();
             } else {
-                updateConsole("Waiting for Shizuku service...");
-                startDownloadButton.setEnabled(false);
+                updateConsole("Shizuku service not available, checking for root access...");
+                if (isRootAvailable()) {
+                    updateConsole("Root access available");
+                    startDownloadButton.setEnabled(true);
+                } else {
+                    updateConsole("Root access not available");
+                    startDownloadButton.setEnabled(false);
+                }
             }
         } else {
             requestStoragePermission();
+        }
+    }
+
+    private boolean isRootAvailable() {
+        try {
+            Process process = Runtime.getRuntime().exec("su");
+            process.getOutputStream().write("exit\n".getBytes());
+            process.getOutputStream().flush();
+            int exitValue = process.waitFor();
+            return exitValue == 0;
+        } catch (Exception e) {
+            return false;
         }
     }
 

@@ -19,6 +19,11 @@ import java.util.zip.CRC32;
 
 public abstract class FileUtils {
     private static final XXHash64 xxHash64 = XXHashFactory.fastestInstance().hash64();
+    private static boolean rootAvailable;
+
+    public static void setRootAvailable(boolean value) {
+        rootAvailable = value;
+    }
 
     // Reusable buffer pool
     private static final ThreadLocal<byte[]> bufferPool = ThreadLocal.withInitial(() -> new byte[8192]);
@@ -74,6 +79,27 @@ public abstract class FileUtils {
                 Files.createDirectories(newPath.getParent());
             }
             Files.copy(file, newPath, StandardCopyOption.REPLACE_EXISTING);
+        } else if (rootAvailable) {
+            try {
+                // Create directory using root command
+                String mkdirCmd = "su -c 'mkdir -p \"" + newPath.getParent().toString() + "\"'";
+                int mkdirResult = executeRootCommand(mkdirCmd);
+
+                if (mkdirResult != 0) {
+                    throw new IOException("Failed to create directory: " + mkdirResult);
+                }
+
+                // Copy file using root command
+                String cpCmd = "su -c 'cp -f \"" + file + "\" \"" + newPath + "\"'";
+                int cpResult = executeRootCommand(cpCmd);
+
+                if (cpResult != 0) {
+                    throw new IOException("Failed to copy file: " + cpResult);
+                }
+            } catch (Exception e) {
+                System.err.println("Root operation failed: " + e.getMessage());
+                throw new IOException("Failed to copy file using root: " + e.getMessage(), e);
+            }
         } else {
             try {
                 // Make sure service is connected
@@ -103,5 +129,10 @@ public abstract class FileUtils {
                 throw new IOException("Failed to copy file using Shizuku: " + e.getMessage(), e);
             }
         }
+    }
+
+    private static int executeRootCommand(String command) throws IOException, InterruptedException {
+        Process process = Runtime.getRuntime().exec(command);
+        return process.waitFor();
     }
 }
