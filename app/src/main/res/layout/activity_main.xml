@@ -24,11 +24,11 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="只从以上网址下载（不使用悠星官方服务器）" />
-	  <Switch
-        android:id="@+id/usePrivateStorageSwitch"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="使用本软件私有存储（Android/data/com.asfu222.bajpdl)" />	
+	<Button
+		android:id="@+id/selectDirectoryButton"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="选择存储资源路径" />
 	<EditText
         android:id="@+id/batchSizeInput"
         android:layout_width="match_parent"

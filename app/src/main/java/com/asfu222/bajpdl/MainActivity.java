@@ -1,7 +1,10 @@
 package com.asfu222.bajpdl;
 
 import android.content.Context;
+import android.content.Intent;
+import android.content.UriPermission;
 import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -12,10 +15,15 @@ import android.widget.EditText;
 import android.widget.ProgressBar;
 import android.widget.Switch;
 import android.widget.TextView;
+
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.widget.NestedScrollView;
+import androidx.documentfile.provider.DocumentFile;
 
 import com.asfu222.bajpdl.core.GameFileManager;
 import com.asfu222.bajpdl.shizuku.ShizukuService;
@@ -37,6 +45,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean shizukuBinderReceived = false;
     private boolean permissionRequested = false;
     private EditText batchSizeInput;
+    private ActivityResultLauncher<Intent> openDirectoryLauncher;
 
     private final Shizuku.OnRequestPermissionResultListener shizukuPermissionListener =
             (requestCode, grantResult) -> {
@@ -120,7 +129,64 @@ public class MainActivity extends AppCompatActivity {
             return false;
         });
 
+        Button selectDirectoryButton = findViewById(R.id.selectDirectoryButton);
+        selectDirectoryButton.setOnClickListener(v -> openDirectorySelector());
+
+        // Register the launcher for opening the directory selector
+        openDirectoryLauncher = registerForActivityResult(
+                new ActivityResultContracts.StartActivityForResult(),
+                result -> {
+                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
+                        Uri treeUri = result.getData().getData();
+                        if (treeUri != null) {
+                            grantUriPermission(getPackageName(), treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
+                            gameFileManager.getDataPath().setRootDir(treeUri);
+                        }
+                    }
+                }
+        );
+        if (!gameFileManager.getDataPath().isReady()) {
+            requestDefaultDirectoryPermissions();
+        }
         setupShizuku();
+    }
+
+
+    private void openDirectorySelector() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
+        openDirectoryLauncher.launch(intent);
+    }
+
+    private void requestDefaultDirectoryPermissions() {
+        Uri defaultUri = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3AAndroid%2Fmedia%2Fcom.asfu222.bajpdl");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            if (!isDirectoryWritable(defaultUri)) {
+                openDirectorySelector();
+            } else {
+                gameFileManager.getDataPath().setRootDir(defaultUri);
+            }
+        } else {
+            if (!hasUriPermission(defaultUri)) {
+                openDirectorySelector();
+            } else {
+                gameFileManager.getDataPath().setRootDir(defaultUri);
+            }
+        }
+    }
+
+    private boolean isDirectoryWritable(Uri uri) {
+        DocumentFile documentFile = DocumentFile.fromTreeUri(this, uri);
+        return documentFile != null && documentFile.canWrite();
+    }
+
+    private boolean hasUriPermission(Uri uri) {
+        for (UriPermission permission : getContentResolver().getPersistedUriPermissions()) {
+            if (permission.getUri().equals(uri) && permission.isWritePermission()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void setupShizuku() {
@@ -227,7 +293,10 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
 
-        gameFileManager.startDownloads();
+        if (!gameFileManager.getDataPath().isReady()) {
+            requestDefaultDirectoryPermissions();
+        }
+            gameFileManager.startDownloads();
     }
 
     private void requestStoragePermission() {

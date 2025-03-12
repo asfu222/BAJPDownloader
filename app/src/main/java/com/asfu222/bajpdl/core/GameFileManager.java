@@ -8,6 +8,7 @@ import com.asfu222.bajpdl.service.CommonCatalogItem;
 import com.asfu222.bajpdl.service.FileDownloader;
 import com.asfu222.bajpdl.service.MXCatalog;
 import com.asfu222.bajpdl.util.FileUtils;
+import com.asfu222.bajpdl.util.MediaFS;
 
 import org.json.JSONException;
 
@@ -31,7 +32,7 @@ public class GameFileManager {
 
     private final FileDownloader fileDownloader;
     private final AppConfig appConfig;
-    private final Path dataPath;
+    private final MediaFS dataPath;
     private final Context appContext;
     private final AtomicInteger totalFiles = new AtomicInteger();
     private final AtomicLong totalSize = new AtomicLong();
@@ -41,12 +42,17 @@ public class GameFileManager {
     public GameFileManager(Context context) {
         this.appConfig = new AppConfig(context);
         this.fileDownloader = new FileDownloader(appConfig);
-        this.dataPath = context.getExternalMediaDirs()[0].toPath();
+        this.dataPath = new MediaFS(context);
+        dataPath.setRootDir(context.getExternalMediaDirs()[0]);
         this.appContext = context;
     }
 
     public AppConfig getAppConfig() {
         return appConfig;
+    }
+
+    public MediaFS getDataPath() {
+        return dataPath;
     }
 
     public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
@@ -261,12 +267,12 @@ public class GameFileManager {
     }
 
     public void startReplacements() {
-        try (var paths = Files.walk(dataPath)) {
+        try (var paths = Files.walk(dataPath.toPath())) {
             CompletableFuture.allOf(paths
                             .filter(Files::isRegularFile)
                             .map(file -> CompletableFuture.runAsync(() -> {
                                 try {
-                                    String urlPath = dataPath.relativize(file).toString();
+                                    String urlPath = dataPath.toPath().relativize(file).toString();
                                     FileUtils.copyToGame(file, urlPath);
                                     log("Successfully copied file to game: " + urlPath);
                                 } catch (IOException e) {
