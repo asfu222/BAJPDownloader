@@ -76,20 +76,18 @@ public class MediaFS {
         return path;
     }
 
-    public byte[] readAllBytes(Path path) {
+    public byte[] readAllBytes(Path path) throws IOException {
         try (InputStream is = newInputStream(path)) {
             byte[] buffer = new byte[is.available()];
             is.read(buffer);
             return buffer;
-        } catch (IOException e) {
-            return new byte[0];
         }
     }
 
     public void deleteIfExists(Path path) {
         DocumentFile currentDir = rootDir;
 
-        for (Path part : path) {
+        for (Path part : path.getParent()) {
             DocumentFile nextDir = currentDir.findFile(part.toString());
             if (nextDir == null || !nextDir.isDirectory()) {
                 return; // Directory does not exist, so file cannot exist
@@ -102,7 +100,6 @@ public class MediaFS {
             file.delete();
         }
     }
-
     public OutputStream newOutputStream(Path path) throws IOException {
         DocumentFile currentDir = rootDir;
 
@@ -129,25 +126,25 @@ public class MediaFS {
     public InputStream newInputStream(Path path) throws IOException {
         DocumentFile currentDir = rootDir;
 
-        for (Path part : path) {
+        for (Path part : path.getParent()) {
             DocumentFile nextDir = currentDir.findFile(part.toString());
             if (nextDir == null || !nextDir.isDirectory()) {
-                throw new IOException("File does not exist: " + path);
+                throw new IOException("Directory does not exist: " + part);
             }
             currentDir = nextDir;
         }
 
         DocumentFile file = currentDir.findFile(path.getFileName().toString());
-        if (file == null) {
+        if (file == null || !file.isFile()) {
             throw new IOException("File does not exist: " + path);
         }
+
         return appContext.getContentResolver().openInputStream(file.getUri());
     }
-
     public boolean exists(Path path) {
         DocumentFile currentDir = rootDir;
 
-        for (Path part : path) {
+        for (Path part : path.getParent()) {
             DocumentFile nextDir = currentDir.findFile(part.toString());
             if (nextDir == null || !nextDir.isDirectory()) {
                 return false;
@@ -155,7 +152,8 @@ public class MediaFS {
             currentDir = nextDir;
         }
 
-        return currentDir.findFile(path.getFileName().toString()) != null;
+        DocumentFile file = currentDir.findFile(path.getFileName().toString());
+        return file != null && file.isFile();
     }
 
     public Path toPath() {
@@ -163,15 +161,22 @@ public class MediaFS {
         return Paths.get(realPath);
     }
 
+    public Path toPath(Path path) {
+        return Paths.get(getRealPathFromUri(rootDir.getUri()), path.toString());
+    }
+
     public boolean isReady() {
         return rootDir != null;
     }
 
     private String getRealPathFromUri(Uri uri) {
+        if ("file".equalsIgnoreCase(uri.getScheme())) {
+            return uri.getPath();
+        }
         String docId = DocumentsContract.getDocumentId(uri);
         String[] split = docId.split(":");
         String type = split[0];
-        String realPath = "";
+        String realPath;
 
         if ("primary".equalsIgnoreCase(type)) {
             realPath = "/storage/emulated/0/" + split[1];
@@ -199,10 +204,10 @@ public class MediaFS {
         }
     }
 
-    public long size(Path file) {
+    public long size(Path path) {
         DocumentFile currentDir = rootDir;
 
-        for (Path part : file) {
+        for (Path part : path.getParent()) {
             DocumentFile nextDir = currentDir.findFile(part.toString());
             if (nextDir == null || !nextDir.isDirectory()) {
                 return 0;
@@ -210,10 +215,11 @@ public class MediaFS {
             currentDir = nextDir;
         }
 
-        DocumentFile docFile = currentDir.findFile(file.getFileName().toString());
-        if (docFile == null) {
+        DocumentFile file = currentDir.findFile(path.getFileName().toString());
+        if (file == null || !file.isFile()) {
             return 0;
         }
-        return docFile.length();
+
+        return file.length();
     }
 }

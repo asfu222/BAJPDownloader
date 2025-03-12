@@ -18,7 +18,6 @@ import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -272,9 +271,9 @@ public class GameFileManager {
                             .filter(Files::isRegularFile)
                             .map(file -> CompletableFuture.runAsync(() -> {
                                 try {
-                                    String urlPath = dataPath.toPath().relativize(file).toString();
-                                    FileUtils.copyToGame(dataPath, file, urlPath);
-                                    log("Successfully copied file to game: " + urlPath);
+                                    Path relPath = dataPath.toPath().relativize(file);
+                                    FileUtils.copyToGame(dataPath, relPath, relPath.toString());
+                                    log("Successfully copied file to game: " + relPath);
                                 } catch (IOException e) {
                                     logError("Error copying file to game", e);
                                 }

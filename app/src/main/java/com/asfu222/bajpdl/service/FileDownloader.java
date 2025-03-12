@@ -102,7 +102,7 @@ public class FileDownloader {
         // Delete invalid file
         basePath.deleteIfExists(downloadedFile);
 
-        return null;
+        throw new IOException("Failed to download " + relPath);
     }
 private Path downloadSingleFile(String fileUrl, MediaFS basePath, String dest, BiFunction<MediaFS, Path, Boolean> verifier, boolean replace) throws IOException {
     Path relDest = Paths.get(dest);

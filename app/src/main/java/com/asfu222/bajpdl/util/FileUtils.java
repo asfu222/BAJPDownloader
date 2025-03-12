@@ -90,7 +90,7 @@ public abstract class FileUtils {
                 }
 
                 // Copy file using root command
-                String cpCmd = "su -c 'cp -f \"" + file + "\" \"" + newPath + "\"'";
+                String cpCmd = "su -c 'cp -f \"" + basePath.toPath(file) + "\" \"" + newPath + "\"'";
                 int cpResult = executeRootCommand(cpCmd);
 
                 if (cpResult != 0) {
@@ -116,7 +116,7 @@ public abstract class FileUtils {
                 }
 
                 // Copy file using shell command
-                String cpCmd = "cp -f '" + file + "' '" + newPath + "'";
+                String cpCmd = "cp -f '" + basePath.toPath(file) + "' '" + newPath + "'";
                 int cpResult = ShizukuService.executeCommand(cpCmd);
 
                 if (cpResult != 0) {
@@ -126,7 +126,7 @@ public abstract class FileUtils {
                 // System.out.println("File copied successfully: " + newPath);
             } catch (Exception e) {
                 System.err.println("Shizuku operation failed: " + e.getMessage());
-                throw new IOException("Failed to copy file using Shizuku: " + e.getMessage(), e);
+                throw new IOException("Failed to copy file " + file + " using Shizuku: " + e.getMessage(), e);
             }
         }
     }
