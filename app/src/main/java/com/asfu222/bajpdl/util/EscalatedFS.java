@@ -118,10 +118,6 @@ public abstract class EscalatedFS {
             }
         }
 
-        // Escape paths for shell
-        String srcPath = source.toString().replace(" ", "\\ ");
-        String destPath = target.toString().replace(" ", "\\ ");
-
         StringBuilder command = new StringBuilder();
 
         if (atomicMove) {
@@ -139,7 +135,7 @@ public abstract class EscalatedFS {
             }
         }
 
-        command.append(srcPath).append(" ").append(destPath);
+        command.append(source.toString()).append(" ").append(target.toString());
 
         try {
             // Make sure target directory exists
@@ -209,13 +205,28 @@ public abstract class EscalatedFS {
     }
 
     static class ProcessOutputStream extends OutputStream {
-        private final Process process;
-        private final OutputStream out;
+    private final Process process;
+    private final OutputStream out;
+    private final Thread errorDrainer;
 
-        ProcessOutputStream(Process process) {
-            this.process = process;
-            this.out = process.getOutputStream();
-        }
+    ProcessOutputStream(Process process) {
+        this.process = process;
+        this.out = process.getOutputStream();
+
+        // Drain error stream to prevent blocking
+        this.errorDrainer = new Thread(() -> {
+            try (InputStream errorStream = process.getErrorStream()) {
+                byte[] buffer = new byte[1024];
+                while (errorStream.read(buffer) != -1) {
+                    // Drain error stream
+                }
+            } catch (IOException ignored) {
+                // Ignore exceptions during cleanup
+            }
+        });
+        errorDrainer.setDaemon(true);
+        errorDrainer.start();
+    }
 
         @Override
         public void write(int b) throws IOException {
@@ -237,15 +248,44 @@ public abstract class EscalatedFS {
             out.flush();
         }
 
-        @Override
-        public void close() throws IOException {
+          @Override
+    public void close() throws IOException {
+        IOException exception = null;
+
+        try {
             out.close();
-            try {
-                process.waitFor();
-            } catch (InterruptedException e) {
-                throw new IOException("Failed to wait for process: " + e.getMessage(), e);
-            }
+        } catch (IOException e) {
+            exception = e;
         }
+
+        try {
+            int exitCode = process.waitFor();
+            if (exitCode != 0 && exitCode != 141) {  // 141 is SIGPIPE
+                String errorMessage;
+                try (InputStream es = process.getErrorStream()) {
+                    errorMessage = new String(es.readAllBytes(), StandardCharsets.UTF_8).trim();
+                } catch (IOException e) {
+                    errorMessage = "Failed to get error message";
+                }
+                throw new IOException("Process exited with code " + exitCode 
+                    + (errorMessage.isEmpty() ? "" : ": " + errorMessage));
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            exception = new IOException("Process interrupted: " + e.getMessage(), e);
+        } finally {
+            process.destroy();
+        }
+
+        try {
+            errorDrainer.join(1000);
+        } catch (InterruptedException ignored) {
+        }
+
+        if (exception != null) {
+            throw exception;
+        }
+    }
     }
 
     static class ProcessInputStream extends InputStream {
