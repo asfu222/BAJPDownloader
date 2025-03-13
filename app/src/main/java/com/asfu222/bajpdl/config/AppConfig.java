@@ -97,69 +97,66 @@ public class AppConfig {
     }
 
     private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
-        Executors.newSingleThreadExecutor().execute(() -> {
-            final String FALLBACK_URL = "https://raw.githubusercontent.com/asfu222/BACNLocalizationResources/refs/heads/main/ba.env";
-            final int MAX_RETRIES = 3;
-            final int TIMEOUT = 5000; // 5 seconds
+    Executors.newSingleThreadExecutor().execute(() -> {
+        final String FALLBACK_URL = "https://raw.githubusercontent.com/asfu222/BACNLocalizationResources/refs/heads/main/ba.env";
+        final int MAX_RETRIES = 3;
+        final int TIMEOUT = 5000; // 5 seconds
 
-            String fallbackUrl = null;
-            List<Exception> errorList = new ArrayList<>();
-            int attempt = 0;
+        List<Exception> errorList = new ArrayList<>();
+        int attempt = 0;
 
-            while (attempt < MAX_RETRIES) {
-                try {
-                    attempt++;
-                    System.out.println("Attempt " + attempt + " to fetch fallback URL...");
+        while (attempt < MAX_RETRIES) {
+            try {
+                attempt++;
+                System.out.println("Attempt " + attempt + " to fetch fallback URL...");
 
-                    URL url = new URL(FALLBACK_URL);
-                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                    connection.setRequestMethod("GET");
-                    connection.setConnectTimeout(TIMEOUT);
-                    connection.setReadTimeout(TIMEOUT);
+                URL url = new URL(FALLBACK_URL);
+                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(TIMEOUT);
+                connection.setReadTimeout(TIMEOUT);
 
-                    int responseCode = connection.getResponseCode();
-                    if (responseCode != 200) {
-                        throw new IOException("HTTP response code: " + responseCode);
-                    }
+                int responseCode = connection.getResponseCode();
+                if (responseCode != 200) {
+                    throw new IOException("HTTP response code: " + responseCode);
+                }
 
-                    try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
-                        String line;
-                        while ((line = in.readLine()) != null) {
-                            if (line.startsWith("ADDRESSABLE_CATALOG_URL=")) {
+                try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                    String line;
+                    while ((line = in.readLine()) != null) {
+                        if (line.startsWith("ADDRESSABLE_CATALOG_URL=")) {
+                            synchronized (this) {
                                 fallbackUrl = line.split("=", 2)[1];
-                                handler.accept(fallbackUrl, null); // Success callback
-                                return;
                             }
+                            System.out.println("Successfully fetched fallback URL: " + fallbackUrl);
+                            return;
                         }
-                    }
-
-                    if (fallbackUrl != null) {
-                        break;
-                    }
-
-                } catch (Exception e) {
-                    errorList.add(e);
-                    System.err.println("Error fetching fallback URL (Attempt " + attempt + "): " + e.getMessage());
-
-                    if (attempt == MAX_RETRIES) {
-                        StringBuilder errorMessage = new StringBuilder("Failed to fetch fallback URL after " + MAX_RETRIES + " attempts.\n");
-                        for (int i = 0; i < errorList.size(); i++) {
-                            errorMessage.append("Attempt ").append(i + 1).append(": ").append(errorList.get(i).getMessage()).append("\n");
-                        }
-                        handler.accept(null, new IOException(errorMessage.toString(), errorList.get(0))); // Pass error to handler
                     }
                 }
 
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
-                    handler.accept(null, e);
-                    break;
+            } catch (Exception e) {
+                errorList.add(e);
+                System.err.println("Error fetching fallback URL (Attempt " + attempt + "): " + e.getMessage());
+
+                if (attempt == MAX_RETRIES) {
+                    StringBuilder errorMessage = new StringBuilder("Failed to fetch fallback URL after " + MAX_RETRIES + " attempts.\n");
+                    for (int i = 0; i < errorList.size(); i++) {
+                        errorMessage.append("Attempt ").append(i + 1).append(": ").append(errorList.get(i).getMessage()).append("\n");
+                    }
+                    handler.accept(null, new IOException(errorMessage.toString(), errorList.get(0))); // Pass error to handler
                 }
             }
-        });
-    }
+
+            try {
+                Thread.sleep(2000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                handler.accept(null, e);
+                break;
+            }
+        }
+    });
+}
 
     public void saveConfig() {
         File configFile = new File(context.getExternalFilesDir("config"), "config.json");
