@@ -96,7 +96,7 @@ public class AppConfig {
         }
     }
 
-    private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
+private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
     Executors.newSingleThreadExecutor().execute(() -> {
         final String FALLBACK_URL = "https://raw.githubusercontent.com/asfu222/BACNLocalizationResources/refs/heads/main/ba.env";
         final int MAX_RETRIES = 3;
@@ -121,17 +121,25 @@ public class AppConfig {
                     throw new IOException("HTTP response code: " + responseCode);
                 }
 
+                String fetchedUrl = null;
                 try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
                     String line;
                     while ((line = in.readLine()) != null) {
                         if (line.startsWith("ADDRESSABLE_CATALOG_URL=")) {
-                            synchronized (this) {
-                                fallbackUrl = line.split("=", 2)[1];
-                            }
-                            System.out.println("Successfully fetched fallback URL: " + fallbackUrl);
-                            return;
+                            fetchedUrl = line.split("=", 2)[1];
+                            break;
                         }
                     }
+                }
+
+                if (fetchedUrl != null) {
+                    synchronized (this) {
+                        fallbackUrl = fetchedUrl;
+                    }
+                    System.out.println("Successfully fetched fallback URL: " + fallbackUrl);
+                    return;
+                } else {
+                    throw new IOException("ADDRESSABLE_CATALOG_URL not found in response.");
                 }
 
             } catch (Exception e) {
