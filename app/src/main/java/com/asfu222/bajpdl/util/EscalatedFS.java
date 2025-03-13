@@ -15,9 +15,6 @@ import java.nio.file.StandardCopyOption;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.stream.Stream;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-
 
 /**
  * A wrapper to convert java.nio.file.Files operations to escalated shell operations.
@@ -33,17 +30,13 @@ public abstract class EscalatedFS {
         return Build.VERSION.SDK_INT > 29;
     }
 
-    private static String escapePath(Path path) {
-        return "\"" + path.toString().replace("\"", "\\\"") + "\"";
-    }
-
     public static Path createDirectories(Path path) throws IOException {
         if (!needsEscalation()) {
             return Files.createDirectories(path);
         }
 
         try {
-            execEscalated("mkdir -p " + escapePath(path)).waitFor();
+            execEscalated("mkdir -p " + path.toString()).waitFor();
         } catch (InterruptedException e) {
             throw new IOException("Failed to create directories: " + e.getMessage(), e);
         }
@@ -55,14 +48,14 @@ public abstract class EscalatedFS {
             return Files.newOutputStream(path);
         }
 
-        return new ProcessOutputStream(execEscalated("cat > " + escapePath(path)));
+        return new ProcessOutputStream(execEscalated("cat > " + path.toString()));
     }
 
     public static InputStream newInputStream(Path path) throws IOException {
         if (!needsEscalation()) {
             return Files.newInputStream(path);
         }
-        return new ProcessInputStream(execEscalated("cat " + escapePath(path)));
+        return new ProcessInputStream(execEscalated("cat " + path.toString()));
     }
 
     public static byte[] readAllBytes(Path path) throws IOException {
@@ -88,7 +81,7 @@ public abstract class EscalatedFS {
         }
 
         try {
-            execEscalated("rm -f " + escapePath(path)).waitFor();
+            execEscalated("rm -f " + path.toString()).waitFor();
         } catch (InterruptedException e) {
             throw new IOException("Failed to delete file: " + e.getMessage(), e);
         }
@@ -100,7 +93,7 @@ public abstract class EscalatedFS {
         }
 
         try {
-            return execEscalated("test -e " + escapePath(path)).waitFor() == 0;
+            return execEscalated("test -e " + path.toString()).waitFor() == 0;
         } catch (InterruptedException e) {
             throw new IOException("Failed to check file existence: " + e.getMessage(), e);
         }
@@ -143,7 +136,7 @@ public abstract class EscalatedFS {
             }
         }
 
-        command.append(escapePath(source)).append(" ").append(escapePath(target));
+        command.append(source.toString()).append(" ").append(target.toString());
 
         try {
             // Make sure target directory exists
@@ -165,46 +158,46 @@ public abstract class EscalatedFS {
     }
 
     public static long size(Path path) throws IOException {
-        if (!needsEscalation()) {
-            return Files.size(path);
-        }
+    if (!needsEscalation()) {
+        return Files.size(path);
+    }
 
-        Process process = null;
-        try {
-            String absolutePath = escapePath(path.toAbsolutePath());
-            process = execEscalated("stat -c %s " + absolutePath);
+    Process process = null;
+    try {
+        String absolutePath = path.toAbsolutePath().toString();
+        process = execEscalated("stat -c %s " + absolutePath);
+        
+        String result = null;
+        String error = null;
+        
+        try (BufferedReader outReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+             BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
             
-            String result = null;
-            String error = null;
+            result = outReader.readLine();
+            error = errReader.readLine();
             
-            try (BufferedReader outReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-                 BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-                
-                result = outReader.readLine();
-                error = errReader.readLine();
-                
-                int exitCode = process.waitFor();
-                if (exitCode != 0) {
-                    throw new IOException("Escalated stat failed with exit code " + exitCode + ": " + error);
-                }
-                
-                return Long.parseLong(result.trim());
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new IOException("Escalated stat failed with exit code " + exitCode + ": " + error);
             }
-        } catch (InterruptedException | NumberFormatException e) {
-            throw new IOException("Failed to get file size: " + e.getMessage(), e);
-        } finally {
-            if (process != null) {
-                process.destroy();
-            }
+            
+            return Long.parseLong(result.trim());
+        }
+    } catch (InterruptedException | NumberFormatException e) {
+        throw new IOException("Failed to get file size: " + e.getMessage(), e);
+    } finally {
+        if (process != null) {
+            process.destroy();
         }
     }
+}
 
     public static Stream<Path> walk(Path start) throws IOException {
         if (!needsEscalation()) {
             return Files.walk(start);
         }
 
-        Process process = execEscalated("find " + escapePath(start) + " -type f -o -type d");
+        Process process = execEscalated("find " + start.toString() + " -type f -o -type d");
 
         java.io.BufferedReader reader = new java.io.BufferedReader(
                 new java.io.InputStreamReader(process.getInputStream()));
@@ -232,28 +225,28 @@ public abstract class EscalatedFS {
     }
 
     static class ProcessOutputStream extends OutputStream {
-        private final Process process;
-        private final OutputStream out;
-        private final Thread errorDrainer;
+    private final Process process;
+    private final OutputStream out;
+    private final Thread errorDrainer;
 
-        ProcessOutputStream(Process process) {
-            this.process = process;
-            this.out = process.getOutputStream();
+    ProcessOutputStream(Process process) {
+        this.process = process;
+        this.out = process.getOutputStream();
 
-            // Drain error stream to prevent blocking
-            this.errorDrainer = new Thread(() -> {
-                try (InputStream errorStream = process.getErrorStream()) {
-                    byte[] buffer = new byte[1024];
-                    while (errorStream.read(buffer) != -1) {
-                        // Drain error stream
-                    }
-                } catch (IOException ignored) {
-                    // Ignore exceptions during cleanup
+        // Drain error stream to prevent blocking
+        this.errorDrainer = new Thread(() -> {
+            try (InputStream errorStream = process.getErrorStream()) {
+                byte[] buffer = new byte[1024];
+                while (errorStream.read(buffer) != -1) {
+                    // Drain error stream
                 }
-            });
-            errorDrainer.setDaemon(true);
-            errorDrainer.start();
-        }
+            } catch (IOException ignored) {
+                // Ignore exceptions during cleanup
+            }
+        });
+        errorDrainer.setDaemon(true);
+        errorDrainer.start();
+    }
 
         @Override
         public void write(int b) throws IOException {
@@ -275,44 +268,44 @@ public abstract class EscalatedFS {
             out.flush();
         }
 
-        @Override
-        public void close() throws IOException {
-            IOException exception = null;
+          @Override
+    public void close() throws IOException {
+        IOException exception = null;
 
-            try {
-                out.close();
-            } catch (IOException e) {
-                exception = e;
-            }
-
-            try {
-                int exitCode = process.waitFor();
-                if (exitCode != 0 && exitCode != 141) {  // 141 is SIGPIPE
-                    String errorMessage;
-                    try (InputStream es = process.getErrorStream()) {
-                        errorMessage = new String(es.readAllBytes(), StandardCharsets.UTF_8).trim();
-                    } catch (IOException e) {
-                        errorMessage = "Failed to get error message";
-                    }
-                    throw new IOException("Process exited with code " + exitCode 
-                        + (errorMessage.isEmpty() ? "" : ": " + errorMessage));
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                exception = new IOException("Process interrupted: " + e.getMessage(), e);
-            } finally {
-                process.destroy();
-            }
-
-            try {
-                errorDrainer.join(1000);
-            } catch (InterruptedException ignored) {
-            }
-
-            if (exception != null) {
-                throw exception;
-            }
+        try {
+            out.close();
+        } catch (IOException e) {
+            exception = e;
         }
+
+        try {
+            int exitCode = process.waitFor();
+            if (exitCode != 0 && exitCode != 141) {  // 141 is SIGPIPE
+                String errorMessage;
+                try (InputStream es = process.getErrorStream()) {
+                    errorMessage = new String(es.readAllBytes(), StandardCharsets.UTF_8).trim();
+                } catch (IOException e) {
+                    errorMessage = "Failed to get error message";
+                }
+                throw new IOException("Process exited with code " + exitCode 
+                    + (errorMessage.isEmpty() ? "" : ": " + errorMessage));
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            exception = new IOException("Process interrupted: " + e.getMessage(), e);
+        } finally {
+            process.destroy();
+        }
+
+        try {
+            errorDrainer.join(1000);
+        } catch (InterruptedException ignored) {
+        }
+
+        if (exception != null) {
+            throw exception;
+        }
+    }
     }
 
     static class ProcessInputStream extends InputStream {
@@ -386,14 +379,7 @@ public abstract class EscalatedFS {
                 int exitCode = process.waitFor();
                 // SIGPIPE (141) is normal when reading ends before process finishes
                 if (exitCode != 0 && exitCode != 141) {
-                    String errorMessage;
-                    try (InputStream es = process.getErrorStream()) {
-                        errorMessage = new String(es.readAllBytes(), StandardCharsets.UTF_8).trim();
-                    } catch (IOException e) {
-                        errorMessage = "Failed to get error message";
-                    }
-                    throw new IOException("Process exited with code " + exitCode 
-                        + (errorMessage.isEmpty() ? "" : ": " + errorMessage));
+                    throw new IOException("Process exited with error code: " + exitCode);
                 }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
@@ -402,11 +388,6 @@ public abstract class EscalatedFS {
                 }
             } finally {
                 process.destroy();
-            }
-
-            try {
-                errorDrainer.join(1000);
-            } catch (InterruptedException ignored) {
             }
 
             if (exception != null) {
