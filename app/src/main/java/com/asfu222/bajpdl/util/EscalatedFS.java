@@ -158,20 +158,39 @@ public abstract class EscalatedFS {
     }
 
     public static long size(Path path) throws IOException {
-        if (!needsEscalation()) {
-            return Files.size(path);
-        }
+    if (!needsEscalation()) {
+        return Files.size(path);
+    }
 
-        try {
-            Process process = execEscalated("stat -c %s " + path.toString());
-            java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getInputStream()));
-            String result = reader.readLine();
+    Process process = null;
+    try {
+        String absolutePath = path.toAbsolutePath().toString();
+        process = execEscalated("stat -c %s " + absolutePath);
+        
+        String result = null;
+        String error = null;
+        
+        try (BufferedReader outReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+             BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+            
+            result = outReader.readLine();
+            error = errReader.readLine();
+            
+            int exitCode = process.waitFor();
+            if (exitCode != 0) {
+                throw new IOException("Escalated stat failed with exit code " + exitCode + ": " + error);
+            }
+            
             return Long.parseLong(result.trim());
-        } catch (NumberFormatException e) {
-            throw new IOException("Failed to get file size: " + e.getMessage(), e);
+        }
+    } catch (InterruptedException | NumberFormatException e) {
+        throw new IOException("Failed to get file size: " + e.getMessage(), e);
+    } finally {
+        if (process != null) {
+            process.destroy();
         }
     }
+}
 
     public static Stream<Path> walk(Path start) throws IOException {
         if (!needsEscalation()) {
