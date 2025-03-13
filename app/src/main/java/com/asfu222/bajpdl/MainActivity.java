@@ -33,6 +33,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_CODE = 1;
     private EditText serverUrlsInput;
     private Button startDownloadButton;
+    private Button startReplacementsButton;
     private ProgressBar progressBar;
     private TextView progressText;
     private TextView consoleOutput;
@@ -48,10 +49,12 @@ public class MainActivity extends AppCompatActivity {
                     updateConsole("Shizuku permission result: " + (grantResult == PackageManager.PERMISSION_GRANTED ? "GRANTED" : "DENIED"));
                     if (grantResult == PackageManager.PERMISSION_GRANTED) {
                         startDownloadButton.setEnabled(true);
+                        startReplacementsButton.setEnabled(true);
                         updateConsole("Shizuku permission granted, ready to use newProcess");
                     } else {
                         updateConsole("⚠️ Shizuku permission denied");
                         startDownloadButton.setEnabled(false);
+                        startReplacementsButton.setEnabled(false);
                     }
                 }
             };
@@ -65,7 +68,10 @@ public class MainActivity extends AppCompatActivity {
     private final Shizuku.OnBinderDeadListener binderDeadListener = () -> {
         shizukuBinderReceived = false;
         updateConsole("Shizuku service disconnected");
-        runOnUiThread(() -> startDownloadButton.setEnabled(false));
+        runOnUiThread(() -> {
+            startDownloadButton.setEnabled(false);
+            startReplacementsButton.setEnabled(false);
+        });
     };
 
     @Override
@@ -76,7 +82,7 @@ public class MainActivity extends AppCompatActivity {
         Switch redownloadSwitch = findViewById(R.id.redownloadSwitch);
         Switch downloadCustomOnlySwitch = findViewById(R.id.downloadCustomOnlySwitch);
         startDownloadButton = findViewById(R.id.startDownloadButton);
-        Button startReplacementsButton = findViewById(R.id.startReplacementsButton);
+        startReplacementsButton = findViewById(R.id.startReplacementsButton);
         startReplacementsButton.setOnClickListener(v -> gameFileManager.startReplacements());
         progressBar = findViewById(R.id.progressBar);
         progressText = findViewById(R.id.progressText);
@@ -133,9 +139,11 @@ public class MainActivity extends AppCompatActivity {
                 updateConsole("Root access available");
                 EscalatedFS.setRootAvailable(true);
                 startDownloadButton.setEnabled(true);
+                startReplacementsButton.setEnabled(true);
                 return;
             }
             startDownloadButton.setEnabled(false);
+            startReplacementsButton.setEnabled(false);
             updateConsole("Root access not available, checking for Shizuku...");
 
             Shizuku.addBinderReceivedListener(binderReceivedListener);
@@ -175,6 +183,7 @@ public class MainActivity extends AppCompatActivity {
             if (permissionResult == PackageManager.PERMISSION_GRANTED) {
                 updateConsole("Shizuku permission already granted");
                 startDownloadButton.setEnabled(true);
+                startReplacementsButton.setEnabled(true);
             } else {
                 if (!permissionRequested) {
                     permissionRequested = true;
@@ -193,6 +202,7 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             logErrorToConsole("Error checking Shizuku permission", e);
             startDownloadButton.setEnabled(false);
+            startReplacementsButton.setEnabled(false);
         }
     }
 
@@ -247,6 +257,7 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 updateConsole("Error: Storage permission denied");
                 startDownloadButton.setEnabled(false);
+                startReplacementsButton.setEnabled(false);
             }
         }
     }
