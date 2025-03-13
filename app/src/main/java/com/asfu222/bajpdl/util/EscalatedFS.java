@@ -285,8 +285,14 @@ public abstract class EscalatedFS {
             int exitCode = process.waitFor();
             if (exitCode != 0 && exitCode != 141) {  // 141 is SIGPIPE
                 String errorMessage;
-                try (InputStream es = process.getErrorStream()) {
-                    errorMessage = new String(es.readAllBytes(), StandardCharsets.UTF_8).trim();
+                try (InputStream es = process.getErrorStream();
+                     ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
+                    byte[] buffer = new byte[1024];
+                    int bytesRead;
+                    while ((bytesRead = es.read(buffer)) != -1) {
+                        baos.write(buffer, 0, bytesRead);
+                    }
+                    errorMessage = new String(baos.toByteArray(), StandardCharsets.UTF_8).trim();
                 } catch (IOException e) {
                     errorMessage = "Failed to get error message";
                 }
