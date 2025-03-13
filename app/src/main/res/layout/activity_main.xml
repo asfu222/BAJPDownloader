@@ -1,97 +1,125 @@
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout 
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:padding="16dp">
 
-	<EditText
-		android:id="@+id/serverUrlsInput"
-		android:layout_width="match_parent"
-		android:layout_height="wrap_content"
-		android:inputType="textUri"
-		android:imeOptions="actionDone"
-		android:singleLine="true" 
-		android:hint="服务器网址" />
+    <!-- Server URL Input -->
+    <EditText
+        android:id="@+id/serverUrlsInput"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:hint="服务器网址"
+        android:inputType="textUri"
+        android:imeOptions="actionDone"
+        android:singleLine="true"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
+    <!-- Redownload Switch -->
     <Switch
         android:id="@+id/redownloadSwitch"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="使用覆盖下载（不缓存）"
-        android:layout_marginEnd="16dp"/>
+        app:layout_constraintTop_toBottomOf="@id/serverUrlsInput"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginTop="8dp" />
 
+    <!-- Download Custom Only Switch -->
     <Switch
         android:id="@+id/downloadCustomOnlySwitch"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="只从以上网址下载（不使用悠星官方服务器）" />
-	<Button
-		android:id="@+id/selectDirectoryButton"
-		android:layout_width="wrap_content"
-		android:layout_height="wrap_content"
-		android:text="选择存储资源路径" />
-	<EditText
+        android:text="只从以上网址下载（不使用悠星官方服务器）"
+        app:layout_constraintTop_toBottomOf="@id/redownloadSwitch"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginTop="8dp" />
+
+    <!-- Batch Size Input -->
+    <EditText
         android:id="@+id/batchSizeInput"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:hint="下载线路数"
-        android:inputType="number" />
+        android:inputType="number"
+        app:layout_constraintTop_toBottomOf="@id/downloadCustomOnlySwitch"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="8dp" />
 
-	<LinearLayout
-		android:layout_width="match_parent"
-		android:layout_height="wrap_content"
-		android:orientation="horizontal">
+    <!-- Download and Replace Button -->
+    <Button
+        android:id="@+id/startDownloadButton"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="下载并替换"
+        app:layout_constraintTop_toBottomOf="@id/batchSizeInput"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toStartOf="@id/startReplacementsButton"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="8dp" />
 
-		<Button
-			android:id="@+id/startDownloadButton"
-			android:layout_width="0dp"
-			android:layout_height="wrap_content"
-			android:layout_weight="1"
-			android:layout_marginEnd="16dp"
-			android:text="下载并替换" />
+    <!-- Replace Only Button -->
+    <Button
+        android:id="@+id/startReplacementsButton"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:text="仅替换"
+        app:layout_constraintTop_toBottomOf="@id/batchSizeInput"
+        app:layout_constraintStart_toEndOf="@id/startDownloadButton"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp"
+        android:layout_marginStart="8dp" />
 
-		<Button
-			android:id="@+id/startReplacementsButton"
-			android:layout_width="0dp"
-			android:layout_height="wrap_content"
-			android:layout_weight="1"
-			android:layout_marginStart="16dp"
-			android:text="仅替换" />
-	</LinearLayout>
+    <!-- Horizontal Progress Bar -->
+    <ProgressBar
+        android:id="@+id/progressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        android:indeterminate="false"
+        android:max="100"
+        android:progress="50"
+        app:layout_constraintTop_toBottomOf="@id/startDownloadButton"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp"
+        android:progressDrawable="@android:drawable/progress_horizontal" />
 
-	<ProgressBar
-		android:id="@+id/progressBar"
-		style="?android:attr/progressBarStyleHorizontal"
-		android:layout_width="match_parent"
-		android:layout_height="wrap_content"
-		android:visibility="gone"
-		android:indeterminate="false"
-		android:max="100"
-		android:progress="50"
-		android:progressDrawable="@android:drawable/progress_horizontal"/>
-
-
+    <!-- Progress Text -->
     <TextView
         android:id="@+id/progressText"
-        android:layout_width="match_parent"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:text="Progress: 0%"
-        android:visibility="gone" />
+        android:visibility="gone"
+        app:layout_constraintTop_toBottomOf="@id/progressBar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="8dp" />
 
-	<!-- Replace your existing TextView with this -->
-	<androidx.core.widget.NestedScrollView
-		android:id="@+id/consoleScrollView"
-		android:layout_width="match_parent"
-		android:layout_height="0dp"
-		android:layout_weight="1"
-		android:fillViewport="true"
-		android:scrollbars="vertical">
+    <!-- Console Output in ScrollView -->
+    <androidx.core.widget.NestedScrollView
+        android:id="@+id/consoleScrollView"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        app:layout_constraintTop_toBottomOf="@id/progressText"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        android:layout_marginTop="16dp">
+        <TextView
+            android:id="@+id/consoleOutput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:fontFamily="monospace"
+            android:padding="8dp"
+            android:textSize="12sp" />
+    </androidx.core.widget.NestedScrollView>
 
-		<TextView
-			android:id="@+id/consoleOutput"
-			android:layout_width="match_parent"
-			android:layout_height="wrap_content"
-			android:fontFamily="monospace"
-			android:padding="8dp"
-			android:textSize="12sp" />
-	</androidx.core.widget.NestedScrollView>
-</LinearLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
