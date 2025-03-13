@@ -18,6 +18,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.TimeUnit;
 
 public class AppConfig {
     private boolean alwaysRedownload = false;
@@ -27,7 +29,7 @@ public class AppConfig {
     private String fallbackUrl;
     private int batchSize = 30;
 
-    public AppConfig(Context context) {
+    public AppConfig(Context context) throws IOException {
         this.context = context;
         loadConfig();
         fetchFallbackUrl();
@@ -93,26 +95,70 @@ public class AppConfig {
         }
     }
 
-    private void fetchFallbackUrl() {
-        var executorService = Executors.newSingleThreadExecutor();
+    private void fetchFallbackUrl() throws IOException {
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
         executorService.execute(() -> {
-            try {
-                URL url = new URL("https://raw.githubusercontent.com/asfu222/BACNLocalizationResources/refs/heads/main/ba.env");
-                HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod("GET");
+            final String FALLBACK_URL = "https://env.bluearchive.me/ba.env"; // Your proxy URL
+            final int MAX_RETRIES = 3;
+            final int TIMEOUT = 5000; // 5 seconds
+            
+            String fallbackUrl = null;
+            List<Exception> errorList = new ArrayList<>(); // Collect errors
+            int attempt = 0;
 
-                try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
-                    String line;
-                    while ((line = in.readLine()) != null) {
-                        if (line.startsWith("ADDRESSABLE_CATALOG_URL=")) {
-                            fallbackUrl = line.split("=")[1];
-                            break;
+            while (attempt < MAX_RETRIES) {
+                try {
+                    attempt++;
+                    System.out.println("Attempt " + attempt + " to fetch fallback URL...");
+
+                    URL url = new URL(FALLBACK_URL);
+                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+                    connection.setRequestMethod("GET");
+                    connection.setConnectTimeout(TIMEOUT);
+                    connection.setReadTimeout(TIMEOUT);
+
+                    int responseCode = connection.getResponseCode();
+                    if (responseCode != 200) {
+                        throw new IOException("HTTP response code: " + responseCode);
+                    }
+
+                    try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
+                        String line;
+                        while ((line = in.readLine()) != null) {
+                            if (line.startsWith("ADDRESSABLE_CATALOG_URL=")) {
+                                fallbackUrl = line.split("=", 2)[1]; // Ensure correct split
+                                System.out.println("Fallback URL retrieved: " + fallbackUrl);
+                                return; // Exit the thread after success
+                            }
                         }
                     }
+
+                    if (fallbackUrl != null) {
+                        break; // Stop retrying if we successfully got the URL
+                    }
+
+                } catch (Exception e) {
+                    errorList.add(e); // Store errors
+                    System.err.println("Error fetching fallback URL (Attempt " + attempt + "): " + e.getMessage());
+
+                    if (attempt == MAX_RETRIES) {
+                        StringBuilder errorMessage = new StringBuilder("Failed to fetch fallback URL after " + MAX_RETRIES + " attempts.\n");
+                        for (int i = 0; i < errorList.size(); i++) {
+                            errorMessage.append("Attempt ").append(i + 1).append(": ").append(errorList.get(i).getMessage()).append("\n");
+                        }
+                        throw new RuntimeException(new IOException(errorMessage.toString(), errorList.get(0)));
+                    }
                 }
-            } catch (IOException e) {
-                e.printStackTrace();
+
+                try {
+                    Thread.sleep(2000); // Wait 2 seconds before retrying
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    System.err.println("Retry interrupted.");
+                    break;
+                }
             }
+
             executorService.shutdown();
         });
     }
