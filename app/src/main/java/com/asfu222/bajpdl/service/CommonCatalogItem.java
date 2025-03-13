@@ -1,7 +1,7 @@
 package com.asfu222.bajpdl.service;
 
+import com.asfu222.bajpdl.util.EscalatedFS;
 import com.asfu222.bajpdl.util.FileUtils;
-import com.asfu222.bajpdl.util.MediaFS;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -29,9 +29,9 @@ public class CommonCatalogItem {
         );
     }
 
-    public boolean verifyIntegrity(MediaFS basePath, Path file) {
+    public boolean verifyIntegrity(Path file) {
         try {
-            return file.getFileName().toString().equals(name) && FileUtils.calculateCRC32(basePath, file) == crc && basePath.size(file) == size;
+            return file.getFileName().toString().equals(name) && FileUtils.calculateCRC32(file) == crc && EscalatedFS.size(file) == size;
         } catch (IOException e) {
             return false;
         }

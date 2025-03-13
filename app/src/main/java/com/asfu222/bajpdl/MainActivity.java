@@ -1,10 +1,7 @@
 package com.asfu222.bajpdl;
 
 import android.content.Context;
-import android.content.Intent;
-import android.content.UriPermission;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -16,17 +13,17 @@ import android.widget.ProgressBar;
 import android.widget.Switch;
 import android.widget.TextView;
 
-import androidx.activity.result.ActivityResultLauncher;
-import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import androidx.core.widget.NestedScrollView;
-import androidx.documentfile.provider.DocumentFile;
 
 import com.asfu222.bajpdl.core.GameFileManager;
-import com.asfu222.bajpdl.shizuku.ShizukuService;
+import com.asfu222.bajpdl.util.EscalatedFS;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Arrays;
 import java.util.List;
 
@@ -44,14 +41,14 @@ public class MainActivity extends AppCompatActivity {
     private boolean shizukuBinderReceived = false;
     private boolean permissionRequested = false;
     private EditText batchSizeInput;
-    private ActivityResultLauncher<Intent> openDirectoryLauncher;
 
     private final Shizuku.OnRequestPermissionResultListener shizukuPermissionListener =
             (requestCode, grantResult) -> {
                 if (requestCode == REQUEST_CODE) {
                     updateConsole("Shizuku permission result: " + (grantResult == PackageManager.PERMISSION_GRANTED ? "GRANTED" : "DENIED"));
                     if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                        bindShizukuService();
+                        startDownloadButton.setEnabled(true);
+                        updateConsole("Shizuku permission granted, ready to use newProcess");
                     } else {
                         updateConsole("⚠️ Shizuku permission denied");
                         startDownloadButton.setEnabled(false);
@@ -62,7 +59,6 @@ public class MainActivity extends AppCompatActivity {
     private final Shizuku.OnBinderReceivedListener binderReceivedListener = () -> {
         shizukuBinderReceived = true;
         updateConsole("Shizuku binder received");
-
         runOnUiThread(this::checkShizukuPermission);
     };
 
@@ -128,89 +124,30 @@ public class MainActivity extends AppCompatActivity {
             return false;
         });
 
-        Button selectDirectoryButton = findViewById(R.id.selectDirectoryButton);
-        selectDirectoryButton.setOnClickListener(v -> openDirectorySelector());
-
-        // Register the launcher for opening the directory selector
-        openDirectoryLauncher = registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    if (result.getResultCode() == RESULT_OK && result.getData() != null) {
-                        Uri treeUri = result.getData().getData();
-                        if (treeUri != null) {
-                            grantUriPermission(getPackageName(), treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                            getContentResolver().takePersistableUriPermission(treeUri, Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_WRITE_URI_PERMISSION);
-                            gameFileManager.getDataPath().setRootDir(treeUri);
-                        }
-                    }
-                }
-        );
-        if (!gameFileManager.getDataPath().isReady()) {
-            requestDefaultDirectoryPermissions();
-        }
         setupEscalatedPermissions();
-    }
-
-
-    private void openDirectorySelector() {
-        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT_TREE);
-        openDirectoryLauncher.launch(intent);
-    }
-
-    private void requestDefaultDirectoryPermissions() {
-        Uri defaultUri = Uri.parse("content://com.android.externalstorage.documents/tree/primary%3AAndroid%2Fmedia%2Fcom.asfu222.bajpdl");
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (!isDirectoryWritable(defaultUri)) {
-                openDirectorySelector();
-            } else {
-                gameFileManager.getDataPath().setRootDir(defaultUri);
-            }
-        } else {
-            if (!hasUriPermission(defaultUri)) {
-                openDirectorySelector();
-            } else {
-                gameFileManager.getDataPath().setRootDir(defaultUri);
-            }
-        }
-    }
-
-    private boolean isDirectoryWritable(Uri uri) {
-        DocumentFile documentFile = DocumentFile.fromTreeUri(this, uri);
-        return documentFile != null && documentFile.canWrite();
-    }
-
-    private boolean hasUriPermission(Uri uri) {
-        for (UriPermission permission : getContentResolver().getPersistedUriPermissions()) {
-            if (permission.getUri().equals(uri) && permission.isWritePermission()) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void setupEscalatedPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            updateConsole("Setting up Shizuku...");
+            if (isRootAvailable()) {
+                updateConsole("Root access available");
+                EscalatedFS.setRootAvailable(true);
+                startDownloadButton.setEnabled(true);
+                return;
+            }
+            startDownloadButton.setEnabled(false);
+            updateConsole("Root access not available, checking for Shizuku...");
 
-            // Add listeners FIRST, before anything else
             Shizuku.addBinderReceivedListener(binderReceivedListener);
             Shizuku.addBinderDeadListener(binderDeadListener);
             Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);
 
-            // Check if Shizuku service is running
             if (Shizuku.pingBinder()) {
                 updateConsole("Shizuku service is running");
                 shizukuBinderReceived = true;
                 checkShizukuPermission();
             } else {
-                updateConsole("Shizuku service not available, checking for root access...");
-                if (isRootAvailable()) {
-                    updateConsole("Root access available");
-                    startDownloadButton.setEnabled(true);
-                } else {
-                    updateConsole("Root access not available");
-                    startDownloadButton.setEnabled(false);
-                }
+                updateConsole("Shizuku service is not running");
             }
         } else {
             requestStoragePermission();
@@ -236,7 +173,8 @@ public class MainActivity extends AppCompatActivity {
                     (permissionResult == PackageManager.PERMISSION_GRANTED ? "GRANTED" : "NOT GRANTED"));
 
             if (permissionResult == PackageManager.PERMISSION_GRANTED) {
-                bindShizukuService();
+                updateConsole("Shizuku permission already granted");
+                startDownloadButton.setEnabled(true);
             } else {
                 if (!permissionRequested) {
                     permissionRequested = true;
@@ -253,40 +191,19 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         } catch (Exception e) {
-            updateConsole("Error checking Shizuku permission: " + e.getMessage());
-            e.printStackTrace();
+            logErrorToConsole("Error checking Shizuku permission", e);
             startDownloadButton.setEnabled(false);
-        }
-    }
-
-    private void bindShizukuService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && shizukuBinderReceived) {
-            updateConsole("Binding to Shizuku service...");
-            try {
-                ShizukuService.bindService(this);
-                updateConsole("Shizuku service bound successfully");
-                startDownloadButton.setEnabled(true);
-            } catch (Exception e) {
-                updateConsole("Failed to bind Shizuku service: " + e.getMessage());
-                e.printStackTrace();
-                startDownloadButton.setEnabled(false);
-            }
         }
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        // Unbind the service when activity is destroyed
+        // Clean up Shizuku listeners
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);
             Shizuku.removeBinderReceivedListener(binderReceivedListener);
             Shizuku.removeBinderDeadListener(binderDeadListener);
-
-            if (ShizukuService.isServiceConnected()) {
-                updateConsole("Unbinding Shizuku service");
-                ShizukuService.unbindService(this);
-            }
         }
     }
 
@@ -304,16 +221,13 @@ public class MainActivity extends AppCompatActivity {
         gameFileManager.getAppConfig().setBatchSize(batchSize);
         gameFileManager.getAppConfig().saveConfig();
 
-        // Check if Shizuku service is required and connected
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !ShizukuService.isServiceConnected()) {
-            updateConsole("Error: Shizuku service not connected. Please check permissions.");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !shizukuBinderReceived &&
+                Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED && !isRootAvailable()) {
+            updateConsole("Error: Root not available or Shizuku permission not granted. Please check permissions.");
             return;
         }
 
-        if (!gameFileManager.getDataPath().isReady()) {
-            requestDefaultDirectoryPermissions();
-        }
-            gameFileManager.startDownloads();
+        gameFileManager.startDownloads();
     }
 
     private void requestStoragePermission() {
@@ -325,7 +239,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
@@ -344,6 +258,12 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    public void logErrorToConsole(String message, Exception ex) {
+        StringWriter sw = new StringWriter();
+        ex.printStackTrace(new PrintWriter(sw));
+        updateConsole(message + ": " + sw);
+    }
+
     public void hideKeyboard() {
         View view = getCurrentFocus();
         if (view != null) {
@@ -352,6 +272,7 @@ public class MainActivity extends AppCompatActivity {
             view.clearFocus();
         }
     }
+
     public void updateProgress(int downloadedFiles, int totalFiles, long downloadedBytes, long totalBytes) {
         runOnUiThread(() -> {
             progressBar.setVisibility(View.VISIBLE);
@@ -359,7 +280,6 @@ public class MainActivity extends AppCompatActivity {
             int progress = totalBytes > 0 ? (int) ((downloadedBytes * 100) / totalBytes) : 0;
             progressBar.setProgress(progress);
             progressText.setText("Progress: " + progress + "%" + " (" + downloadedFiles + "/" + totalFiles + " Files, " + downloadedBytes + "/" + totalBytes + " MB)");
-            // consoleOutput.append("Downloaded " + downloadedFiles + "/" + totalFiles + " Files (" + downloadedBytes + "/" + totalBytes + " MB)\n");
             if (downloadedFiles == totalFiles && downloadedBytes == totalBytes) {
                 progressBar.setVisibility(View.GONE);
                 progressText.setVisibility(View.GONE);
