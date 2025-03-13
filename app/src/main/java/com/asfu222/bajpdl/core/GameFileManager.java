@@ -39,7 +39,7 @@ public class GameFileManager {
     private final AtomicLong downloadedSize = new AtomicLong();
 
     public GameFileManager(Context context) {
-        this.appConfig = new AppConfig(context);
+        this.appConfig = new AppConfig(context, this::logError);
         this.fileDownloader = new FileDownloader(appConfig);
         this.dataPath = context.getExternalMediaDirs()[0].toPath();
         this.appContext = context;
