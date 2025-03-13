@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiConsumer;
 
 public class AppConfig {
     private boolean alwaysRedownload = false;
@@ -29,10 +30,10 @@ public class AppConfig {
     private String fallbackUrl;
     private int batchSize = 30;
 
-    public AppConfig(Context context) throws IOException {
+    public AppConfig(Context context, BiConsumer<String, Exception> handler) {
         this.context = context;
         loadConfig();
-        fetchFallbackUrl();
+        fetchFallbackUrl(handler);
     }
 
     public boolean shouldAlwaysRedownload() {
@@ -95,15 +96,14 @@ public class AppConfig {
         }
     }
 
-    private void fetchFallbackUrl() throws IOException {
-        ExecutorService executorService = Executors.newSingleThreadExecutor();
-        executorService.execute(() -> {
-            final String FALLBACK_URL = "https://env.bluearchive.me/ba.env"; // Your proxy URL
+    private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
+        Executors.newSingleThreadExecutor().execute(() -> {
+            final String FALLBACK_URL = "https://raw.githubusercontent.com/asfu222/BACNLocalizationResources/refs/heads/main/ba.env";
             final int MAX_RETRIES = 3;
             final int TIMEOUT = 5000; // 5 seconds
-            
+
             String fallbackUrl = null;
-            List<Exception> errorList = new ArrayList<>(); // Collect errors
+            List<Exception> errorList = new ArrayList<>();
             int attempt = 0;
 
             while (attempt < MAX_RETRIES) {
@@ -126,19 +126,19 @@ public class AppConfig {
                         String line;
                         while ((line = in.readLine()) != null) {
                             if (line.startsWith("ADDRESSABLE_CATALOG_URL=")) {
-                                fallbackUrl = line.split("=", 2)[1]; // Ensure correct split
-                                System.out.println("Fallback URL retrieved: " + fallbackUrl);
-                                return; // Exit the thread after success
+                                fallbackUrl = line.split("=", 2)[1];
+                                handler.accept(fallbackUrl, null); // Success callback
+                                return;
                             }
                         }
                     }
 
                     if (fallbackUrl != null) {
-                        break; // Stop retrying if we successfully got the URL
+                        break;
                     }
 
                 } catch (Exception e) {
-                    errorList.add(e); // Store errors
+                    errorList.add(e);
                     System.err.println("Error fetching fallback URL (Attempt " + attempt + "): " + e.getMessage());
 
                     if (attempt == MAX_RETRIES) {
@@ -146,20 +146,18 @@ public class AppConfig {
                         for (int i = 0; i < errorList.size(); i++) {
                             errorMessage.append("Attempt ").append(i + 1).append(": ").append(errorList.get(i).getMessage()).append("\n");
                         }
-                        throw new RuntimeException(new IOException(errorMessage.toString(), errorList.get(0)));
+                        handler.accept(null, new IOException(errorMessage.toString(), errorList.get(0))); // Pass error to handler
                     }
                 }
 
                 try {
-                    Thread.sleep(2000); // Wait 2 seconds before retrying
+                    Thread.sleep(2000);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    System.err.println("Retry interrupted.");
+                    handler.accept(null, e);
                     break;
                 }
             }
-
-            executorService.shutdown();
         });
     }
 
