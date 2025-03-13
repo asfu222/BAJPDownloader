@@ -27,6 +27,11 @@ import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import okhttp3.ResponseBody;
+
 public class FileDownloader {
     private final ExecutorService executorService;
     private final AppConfig appConfig;
@@ -100,41 +105,57 @@ public class FileDownloader {
 
         throw new IOException("Failed to download " + relPath);
     }
-private Path downloadSingleFile(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace) throws IOException {
-    if (EscalatedFS.exists(dest)) {
-        if (verifier.apply(dest) && !replace) {
-            return dest; // File exists and is valid; return it.
-        } else {
-            EscalatedFS.deleteIfExists(dest); // Delete file if it's invalid or if replace is true.
-        }
-    }
+    private static final OkHttpClient client = new OkHttpClient.Builder()
+            .connectTimeout(10000, java.util.concurrent.TimeUnit.MILLISECONDS) // 10 seconds
+            .readTimeout(20000, java.util.concurrent.TimeUnit.MILLISECONDS)    // 20 seconds
+            .build();
 
-    HttpURLConnection connection = null;
-    try {
-        URL url = new URL(fileUrl);
-        connection = (HttpURLConnection) url.openConnection();
-        connection.setConnectTimeout(CONNECTION_TIMEOUT);
-        connection.setReadTimeout(READ_TIMEOUT);
-
-        EscalatedFS.createDirectories(dest.getParent());
-
-        try (InputStream in = new BufferedInputStream(connection.getInputStream());
-             OutputStream out = new BufferedOutputStream(EscalatedFS.newOutputStream(dest))) {
-
-            byte[] buffer = new byte[8192];
-            int bytesRead;
-            while ((bytesRead = in.read(buffer)) != -1) {
-                out.write(buffer, 0, bytesRead);
+    private Path downloadSingleFile(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace) throws IOException {
+        // Check if file exists and is valid
+        if (EscalatedFS.exists(dest)) {
+            if (verifier.apply(dest) && !replace) {
+                return dest; // File exists and is valid; return it.
+            } else {
+                EscalatedFS.deleteIfExists(dest); // Delete file if it's invalid or replace is true.
             }
-            out.flush();
-            return dest;
         }
-    } finally {
-        if (connection != null) {
-            connection.disconnect();
+
+        Request request = new Request.Builder()
+                .url(fileUrl)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            // Ensure the request was successful
+            if (!response.isSuccessful()) {
+                throw new IOException("Failed to download file: " + response.code());
+            }
+
+            // Ensure the destination directories are created
+            EscalatedFS.createDirectories(dest.getParent());
+
+            // Get the input stream from the response body
+            ResponseBody body = response.body();
+            if (body == null) {
+                throw new IOException("No response body received");
+            }
+
+            // Write the response body to the destination file
+            try (InputStream in = body.byteStream();
+                 OutputStream out = EscalatedFS.newOutputStream(dest)) {
+
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+                while ((bytesRead = in.read(buffer)) != -1) {
+                    out.write(buffer, 0, bytesRead);
+                }
+                out.flush();
+            }
+
+            return dest;
+        } catch (IOException e) {
+            throw new IOException("Download failed: " + e.getMessage(), e);
         }
     }
-}
 
     public CompletableFuture<Void> fetchServerAvailable() {
         return CompletableFuture.runAsync(() -> {

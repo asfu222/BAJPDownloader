@@ -36,7 +36,7 @@ dependencies {
     implementation(libs.json)
     implementation(libs.shizuku.api)
     implementation(libs.shizuku.provider)
-
+    implementation(libs.okhttp)
     implementation(libs.appcompat)
     implementation(libs.material)
     testImplementation(libs.junit)

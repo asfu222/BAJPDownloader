@@ -1,5 +1,6 @@
 [versions]
 agp = "8.9.0"
+okhttp = "4.12.0"
 shizuku-api = "13.1.5"
 shizuku-provider = "13.1.5"
 json = "20231013"
@@ -11,6 +12,7 @@ lz4Java = "1.8.0"
 material = "1.12.0"
 
 [libraries]
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 shizuku-api = { module = "dev.rikka.shizuku:api", version.ref = "shizuku-api" }
 shizuku-provider = { module = "dev.rikka.shizuku:provider", version.ref = "shizuku-provider" }
 json = { module = "org.json:json", version.ref = "json" }
