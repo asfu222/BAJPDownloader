@@ -171,16 +171,9 @@ public class MainActivity extends AppCompatActivity {
 
     private void setupEscalatedPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            if (isRootAvailable()) {
-                updateConsole("Root access available");
-                EscalatedFS.setRootAvailable(true);
-                startDownloadButton.setEnabled(true);
-                startReplacementsButton.setEnabled(true);
-                return;
-            }
             startDownloadButton.setEnabled(false);
             startReplacementsButton.setEnabled(false);
-            updateConsole("Root access not available, checking for Shizuku...");
+            updateConsole("Checking for Shizuku...");
 
             Shizuku.addBinderReceivedListener(binderReceivedListener);
             Shizuku.addBinderDeadListener(binderDeadListener);
@@ -192,6 +185,12 @@ public class MainActivity extends AppCompatActivity {
                 checkShizukuPermission();
             } else {
                 updateConsole("Shizuku service is not running");
+                if (isRootAvailable()) {
+                    updateConsole("Root access available");
+                    EscalatedFS.setRootAvailable(true);
+                    startDownloadButton.setEnabled(true);
+                    startReplacementsButton.setEnabled(true);
+                }
             }
         } else {
             requestStoragePermission();
