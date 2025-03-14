@@ -13,11 +13,8 @@ import com.asfu222.bajpdl.util.FileUtils;
 import org.json.JSONException;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -48,6 +45,7 @@ public class GameFileManager {
     public AppConfig getAppConfig() {
         return appConfig;
     }
+
     public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
         return fileDownloader.downloadFile(dataPath, catalogEntry.getKey(), catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError)
                 .thenApply(downloadedFile -> {
@@ -56,7 +54,6 @@ public class GameFileManager {
                     updateProgress();
                     if (downloadedFile == null) {
                         log("Failed to download file: " + catalogEntry.getKey());
-                        // Still increment counter so we don't get stuck
                         return false;
                     }
 
@@ -66,7 +63,6 @@ public class GameFileManager {
                         return true;
                     } catch (IOException e) {
                         logError("Error copying file to game", e);
-                        // Continue processing other files even if one fails
                         return false;
                     }
                 });
@@ -75,20 +71,16 @@ public class GameFileManager {
     public CompletableFuture<Boolean> processFiles(Map<String, CommonCatalogItem> catalog) {
         log("Processing " + catalog.size() + " files");
 
-        // Create a single completable future for the entire process
         CompletableFuture<Boolean> completionFuture = new CompletableFuture<>();
 
-        // Get all catalog entries and sort by size (process smaller files first)
         List<Map.Entry<String, CommonCatalogItem>> sortedEntries = catalog.entrySet().stream()
-                .sorted((e1, e2) -> Long.compare(e2.getValue().size, e1.getValue().size)) // Largest first
+                .sorted((e1, e2) -> Long.compare(e2.getValue().size, e1.getValue().size))
                 .collect(Collectors.toList());
 
-        // Batch size and failure tracking
         final int BATCH_SIZE = appConfig.getBatchSize();
         AtomicInteger currentIndex = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
 
-        // Process next batch recursively
         processNextBatch(sortedEntries, currentIndex, failureCount, BATCH_SIZE, completionFuture);
 
         return completionFuture;
@@ -100,34 +92,25 @@ public class GameFileManager {
                                   int batchSize,
                                   CompletableFuture<Boolean> completionFuture) {
 
-        // Check if we're done
         if (currentIndex.get() >= entries.size()) {
             log("All files processed. Failed: " + failureCount.get());
             completionFuture.complete(failureCount.get() == 0);
             return;
         }
 
-        // Get next batch of files to process
         int endIndex = Math.min(currentIndex.get() + batchSize, entries.size());
-        List<Map.Entry<String, CommonCatalogItem>> currentBatch =
-                entries.subList(currentIndex.get(), endIndex);
+        List<Map.Entry<String, CommonCatalogItem>> currentBatch = entries.subList(currentIndex.get(), endIndex);
 
         log(String.format("Processing batch %d (files %d-%d of %d)",
                 currentIndex.get() / batchSize + 1,
                 currentIndex.get() + 1, endIndex, entries.size()));
 
-        // Process each file in the batch
         List<CompletableFuture<Boolean>> batchFutures = currentBatch.stream()
-                .map(entry -> {
-                    // log("Starting download: " + entry.getKey());
-                    return processFile(entry);
-                })
+                .map(this::processFile)
                 .collect(Collectors.toList());
 
-        // When all files in this batch complete, process the next batch
         CompletableFuture.allOf(batchFutures.toArray(new CompletableFuture[0]))
                 .thenAccept(v -> {
-                    // Count failures in this batch
                     for (CompletableFuture<Boolean> future : batchFutures) {
                         try {
                             if (!future.join()) {
@@ -143,17 +126,12 @@ public class GameFileManager {
                             currentIndex.get() / batchSize + 1,
                             currentIndex.get() + 1, endIndex, entries.size(), failureCount.get()));
 
-                    // Move to next batch
                     currentIndex.set(endIndex);
-
-                    // Schedule next batch processing
                     processNextBatch(entries, currentIndex, failureCount, batchSize, completionFuture);
                 })
                 .exceptionally(ex -> {
                     logError("Critical error in batch", new Exception(ex));
                     failureCount.incrementAndGet();
-
-                    // Move to next batch despite errors
                     currentIndex.set(endIndex);
                     processNextBatch(entries, currentIndex, failureCount, batchSize, completionFuture);
                     return null;
@@ -169,93 +147,64 @@ public class GameFileManager {
         fileDownloader.fetchServerAvailable().thenRun(() -> {
             Set<String> availableCustomDownloads = fileDownloader.getAvailableCustomDownloads();
 
-            List<CompletableFuture<Boolean>> catalogFutures = new ArrayList<>();
-            catalogFutures.add(fileDownloader.downloadFile(dataPath, "TableBundles/TableCatalog.bytes", path -> true, true, this::logError).thenCompose(catalogPath -> {
-                try {
-                    log("Downloaded TableCatalog.bytes, processing...");
-                    var catalog = MXCatalog.parseMemoryPackerBytes(EscalatedFS.readAllBytes(catalogPath), false).getData();
-                    if (appConfig.shouldDownloadCustomOnly()) {
-                        catalog.keySet().removeIf(key -> !availableCustomDownloads.contains(key));
-                    }
-                    totalFiles.addAndGet(catalog.size());
-                    totalSize.addAndGet(catalog.values().stream().mapToLong(item -> item.size).sum());
-                    updateProgress();
-                    log("TableCatalog contains " + catalog.size() + " files");
+            List<CompletableFuture<Boolean>> catalogFutures = List.of(
+                    downloadAndProcessCatalog("TableBundles/TableCatalog.bytes", availableCustomDownloads),
+                    downloadAndProcessCatalog("MediaResources/Catalog/MediaCatalog.bytes", availableCustomDownloads),
+                    downloadAndProcessCatalog("Android/bundleDownloadInfo.json", availableCustomDownloads),
+                    downloadAndCopyFile("TableBundles/TableCatalog.hash"),
+                    downloadAndCopyFile("MediaResources/Catalog/MediaCatalog.hash"),
+                    downloadAndCopyFile("Android/bundleDownloadInfo.hash")
+            );
 
-                    FileUtils.copyToGame(catalogPath, "TableBundles/TableCatalog.bytes");
-                    return processFiles(catalog);
-                } catch (IOException ex) {
-                    logError("Error processing TableCatalog.bytes", ex);
-                    return CompletableFuture.completedFuture(false);
-                }
-            }));
-            catalogFutures.add(fileDownloader.downloadFile(dataPath, "MediaResources/Catalog/MediaCatalog.bytes", path -> true, true, this::logError).thenCompose(catalogPath -> {
-                try {
-                    log("Downloaded MediaCatalog.bytes, processing...");
-                    var catalog = MXCatalog.parseMemoryPackerBytes(EscalatedFS.readAllBytes(catalogPath), true).getData();
-                    if (appConfig.shouldDownloadCustomOnly()) {
-                        catalog.keySet().removeIf(key -> !availableCustomDownloads.contains(key));
-                    }
-                    totalFiles.addAndGet(catalog.size());
-                    totalSize.addAndGet(catalog.values().stream().mapToLong(item -> item.size).sum());
-                    updateProgress();
-                    log("MediaCatalog contains " + catalog.size() + " files");
-
-                    FileUtils.copyToGame(catalogPath, "MediaResources/Catalog/MediaCatalog.bytes");
-                    return processFiles(catalog);
-                } catch (IOException ex) {
-                    logError("Error processing MediaCatalog", ex);
-                    return CompletableFuture.completedFuture(false);
-                }
-            }));
-            catalogFutures.add(fileDownloader.downloadFile(dataPath, "Android/bundleDownloadInfo.json", path -> true, true, this::logError).thenCompose(catalogPath -> {
-                try {
-                    log("Downloaded bundleDownloadInfo.json, processing...");
-                    var catalog = MXCatalog.parseBundleDLInfoJson(EscalatedFS.readAllBytes(catalogPath)).getData();
-                    if (appConfig.shouldDownloadCustomOnly()) {
-                        catalog.keySet().removeIf(key -> !availableCustomDownloads.contains(key));
-                    }
-                    totalFiles.addAndGet(catalog.size());
-                    totalSize.addAndGet(catalog.values().stream().mapToLong(item -> item.size).sum());
-                    updateProgress();
-                    log("bundleDownloadInfo contains " + catalog.size() + " files");
-
-                    FileUtils.copyToGame(catalogPath, "Android/bundleDownloadInfo.json");
-                    return processFiles(catalog);
-                } catch (IOException | JSONException ex) {
-                    logError("Error processing bundleDownloadInfo.json", ex);
-                    return CompletableFuture.completedFuture(false);
-                }
-            }));
-            catalogFutures.add(fileDownloader.downloadFile(dataPath, "TableBundles/TableCatalog.hash", path -> true, true, this::logError).thenCompose(path -> {
-                try {
-                    FileUtils.copyToGame(path, "TableBundles/TableCatalog.hash");
-                    return CompletableFuture.completedFuture(true);
-                } catch (IOException e) {
-                    logError("Error copying TableCatalog.hash to game", e);
-                    return CompletableFuture.completedFuture(false);
-                }
-            }));
-            catalogFutures.add(fileDownloader.downloadFile(dataPath, "MediaResources/Catalog/MediaCatalog.hash", path -> true, true, this::logError).thenCompose(path -> {
-                try {
-                    FileUtils.copyToGame(path, "MediaResources/Catalog/MediaCatalog.hash");
-                    return CompletableFuture.completedFuture(true);
-                } catch (IOException e) {
-                    logError("Error copying MediaCatalog.hash to game", e);
-                    return CompletableFuture.completedFuture(false);
-                }
-            }));
-            catalogFutures.add(fileDownloader.downloadFile(dataPath, "Android/bundleDownloadInfo.hash", path -> true, true, this::logError).thenCompose(path -> {
-                try {
-                    FileUtils.copyToGame(path, "Android/bundleDownloadInfo.hash");
-                    return CompletableFuture.completedFuture(true);
-                } catch (IOException e) {
-                    logError("Error copying bundleDownloadInfo.hash to game", e);
-                    return CompletableFuture.completedFuture(false);
-                }
-            }));
             CompletableFuture.allOf(catalogFutures.toArray(new CompletableFuture[0]))
                     .thenAccept(v -> log("All downloads completed"));
+        });
+    }
+
+    private CompletableFuture<Boolean> downloadAndProcessCatalog(String catalogPath, Set<String> availableCustomDownloads) {
+        return fileDownloader.downloadFile(dataPath, catalogPath, path -> true, true, this::logError).thenCompose(path -> {
+            try {
+                log("Downloaded " + catalogPath + ", processing...");
+                MXCatalog catalog;
+                switch (catalogPath) {
+                    case "TableBundles/TableCatalog.bytes":
+                        catalog = MXCatalog.parseMemoryPackerBytes(EscalatedFS.readAllBytes(path), false);
+                        break;
+                    case "MediaResources/Catalog/MediaCatalog.bytes":
+                        catalog = MXCatalog.parseMemoryPackerBytes(EscalatedFS.readAllBytes(path), true);
+                        break;
+                    case "Android/bundleDownloadInfo.json":
+                        catalog = MXCatalog.parseBundleDLInfoJson(EscalatedFS.readAllBytes(path));
+                        break;
+                    default:
+                        return CompletableFuture.completedFuture(false);
+                }
+                if (appConfig.shouldDownloadCustomOnly()) {
+                    catalog.getData().keySet().removeIf(key -> !availableCustomDownloads.contains(key));
+                }
+                totalFiles.addAndGet(catalog.getData().size());
+                totalSize.addAndGet(catalog.getData().values().stream().mapToLong(item -> item.size).sum());
+                updateProgress();
+                log(catalogPath + " contains " + catalog.getData().size() + " files");
+
+                FileUtils.copyToGame(path, catalogPath);
+                return processFiles(catalog.getData());
+            } catch (IOException | JSONException ex) {
+                logError("Error processing " + catalogPath, ex);
+                return CompletableFuture.completedFuture(false);
+            }
+        });
+    }
+
+    private CompletableFuture<Boolean> downloadAndCopyFile(String filePath) {
+        return fileDownloader.downloadFile(dataPath, filePath, path -> true, true, this::logError).thenCompose(path -> {
+            try {
+                FileUtils.copyToGame(path, filePath);
+                return CompletableFuture.completedFuture(true);
+            } catch (IOException e) {
+                logError("Error copying " + filePath + " to game", e);
+                return CompletableFuture.completedFuture(false);
+            }
         });
     }
 
@@ -277,7 +226,7 @@ public class GameFileManager {
             logError("Error walking directory", e);
         }
     }
-    
+
     public void shutdown() {
         fileDownloader.shutdown();
     }
