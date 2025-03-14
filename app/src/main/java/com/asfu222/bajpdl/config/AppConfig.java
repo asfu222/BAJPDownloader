@@ -18,8 +18,6 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 
 public class AppConfig {
@@ -28,7 +26,7 @@ public class AppConfig {
     private List<String> serverUrls;
     private final Context context;
     private String fallbackUrl;
-    private int batchSize = 30;
+    private int concurrentDownloads = 10;
 
     public AppConfig(Context context, BiConsumer<String, Exception> handler) {
         this.context = context;
@@ -52,12 +50,12 @@ public class AppConfig {
         this.downloadCustomOnly = downloadCustomOnly;
     }
 
-    public int getBatchSize() {
-        return batchSize;
+    public int getConcurrentDownloads() {
+        return concurrentDownloads;
     }
 
-    public void setBatchSize(int batchSize) {
-        this.batchSize = batchSize;
+    public void setConcurrentDownloads(int concurrentDownloads) {
+        this.concurrentDownloads = concurrentDownloads;
     }
 
     public List<String> getServerUrls() {
@@ -81,7 +79,7 @@ public class AppConfig {
                 alwaysRedownload = json.getBoolean("replaceDownloadedFiles");
                 downloadCustomOnly = json.getBoolean("downloadCustomOnly");
                 JSONArray urlsArray = json.getJSONArray("serverUrls");
-                batchSize = json.optInt("batchSize", 10);
+                concurrentDownloads = json.optInt("concurrentDownloads", 10);
                 serverUrls = new ArrayList<>();
                 for (int i = 0; i < urlsArray.length(); i++) {
                     serverUrls.add(urlsArray.getString(i));
@@ -174,7 +172,7 @@ private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
             json.put("downloadCustomOnly", downloadCustomOnly);
             JSONArray urlsArray = new JSONArray(serverUrls);
             json.put("serverUrls", urlsArray);
-            json.put("batchSize", batchSize);
+            json.put("concurrentDownloads", concurrentDownloads);
             writer.write(json.toString());
         } catch (IOException | JSONException e) {
             e.printStackTrace();

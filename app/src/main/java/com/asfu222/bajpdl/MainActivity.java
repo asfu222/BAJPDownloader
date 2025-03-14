@@ -155,7 +155,7 @@ public class MainActivity extends AppCompatActivity {
         batchSizeInput = findViewById(R.id.batchSizeInput);
 
         // Set the current batch size from AppConfig
-        batchSizeInput.setText(String.valueOf(gameFileManager.getAppConfig().getBatchSize()));
+        batchSizeInput.setText(String.valueOf(gameFileManager.getAppConfig().getConcurrentDownloads()));
 
         // Save the batch size when the user finishes editing
         batchSizeInput.setOnEditorActionListener((v, actionId, event) -> {
@@ -277,6 +277,7 @@ public class MainActivity extends AppCompatActivity {
             }
             userService = null;
         }
+        gameFileManager.shutdown();
     }
 
     private void startDownloads() {
@@ -290,7 +291,7 @@ public class MainActivity extends AppCompatActivity {
         List<String> serverUrls = Arrays.asList(serverUrlsText.split(","));
         gameFileManager.getAppConfig().setServerUrls(serverUrls);
         int batchSize = Math.max(Integer.parseInt(batchSizeInput.getText().toString()), 1);
-        gameFileManager.getAppConfig().setBatchSize(batchSize);
+        gameFileManager.getAppConfig().setConcurrentDownloads(batchSize);
         gameFileManager.getAppConfig().saveConfig();
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !shizukuBinderReceived &&

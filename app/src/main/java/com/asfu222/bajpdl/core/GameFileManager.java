@@ -19,6 +19,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -46,26 +48,33 @@ public class GameFileManager {
         return appConfig;
     }
 
-    public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
-        return fileDownloader.downloadFile(dataPath, catalogEntry.getKey(), catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError)
-                .thenApply(downloadedFile -> {
-                    downloadedFiles.incrementAndGet();
-                    downloadedSize.addAndGet(catalogEntry.getValue().size);
-                    updateProgress();
-                    if (downloadedFile == null) {
-                        log("Failed to download file: " + catalogEntry.getKey());
-                        return false;
-                    }
+    private ExecutorService downloadExecutor;
 
-                    try {
-                        log("Copying file to game: " + catalogEntry.getKey());
-                        FileUtils.copyToGame(downloadedFile, catalogEntry.getKey());
-                        return true;
-                    } catch (IOException e) {
-                        logError("Error copying file to game", e);
-                        return false;
-                    }
-                });
+    public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Path downloadedFile = fileDownloader.downloadFile(dataPath, catalogEntry.getKey(),
+                                catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError)
+                        .join(); // Block until completion (reduces uncontrolled task creation)
+
+                if (downloadedFile == null) {
+                    log("Failed to download file: " + catalogEntry.getKey());
+                    return false;
+                }
+
+                log("Copying file to game: " + catalogEntry.getKey());
+                FileUtils.copyToGame(downloadedFile, catalogEntry.getKey());
+
+                downloadedFiles.incrementAndGet();
+                downloadedSize.addAndGet(catalogEntry.getValue().size);
+                updateProgress();
+                return true;
+
+            } catch (Exception e) {
+                logError("Error processing file: " + catalogEntry.getKey(), e);
+                return false;
+            }
+        }, downloadExecutor);
     }
 
     public CompletableFuture<Boolean> processFiles(Map<String, CommonCatalogItem> catalog) {
@@ -77,66 +86,28 @@ public class GameFileManager {
                 .sorted((e1, e2) -> Long.compare(e2.getValue().size, e1.getValue().size))
                 .collect(Collectors.toList());
 
-        final int BATCH_SIZE = appConfig.getBatchSize();
-        AtomicInteger currentIndex = new AtomicInteger(0);
-        AtomicInteger failureCount = new AtomicInteger(0);
+        // Start all files downloads concurrently without batching
+        List<CompletableFuture<Boolean>> downloadFutures = sortedEntries.stream()
+                .map(this::processFile) // processFile handles each file download and post-processing
+                .collect(Collectors.toList());
 
-        processNextBatch(sortedEntries, currentIndex, failureCount, BATCH_SIZE, completionFuture);
+        // After all downloads finish, handle completion
+        CompletableFuture.allOf(downloadFutures.toArray(new CompletableFuture[0]))
+                .thenAccept(v -> {
+                    long failures = downloadFutures.stream().filter(future -> !future.join()).count();
+                    log("All files processed. Failed: " + failures);
+                    completionFuture.complete(failures == 0);
+                })
+                .exceptionally(ex -> {
+                    logError("Critical error processing files", new Exception(ex));
+                    completionFuture.complete(false); // If an error occurs, complete the future with failure
+                    return null;
+                });
 
         return completionFuture;
     }
 
-    private void processNextBatch(List<Map.Entry<String, CommonCatalogItem>> entries,
-                                  AtomicInteger currentIndex,
-                                  AtomicInteger failureCount,
-                                  int batchSize,
-                                  CompletableFuture<Boolean> completionFuture) {
 
-        if (currentIndex.get() >= entries.size()) {
-            log("All files processed. Failed: " + failureCount.get());
-            completionFuture.complete(failureCount.get() == 0);
-            return;
-        }
-
-        int endIndex = Math.min(currentIndex.get() + batchSize, entries.size());
-        List<Map.Entry<String, CommonCatalogItem>> currentBatch = entries.subList(currentIndex.get(), endIndex);
-
-        log(String.format("Processing batch %d (files %d-%d of %d)",
-                currentIndex.get() / batchSize + 1,
-                currentIndex.get() + 1, endIndex, entries.size()));
-
-        List<CompletableFuture<Boolean>> batchFutures = currentBatch.stream()
-                .map(this::processFile)
-                .collect(Collectors.toList());
-
-        CompletableFuture.allOf(batchFutures.toArray(new CompletableFuture[0]))
-                .thenAccept(v -> {
-                    for (CompletableFuture<Boolean> future : batchFutures) {
-                        try {
-                            if (!future.join()) {
-                                failureCount.incrementAndGet();
-                            }
-                        } catch (Exception e) {
-                            failureCount.incrementAndGet();
-                            logError("Error processing batch item", e);
-                        }
-                    }
-
-                    log(String.format("Batch %d complete (%d-%d of %d). Current failures: %d",
-                            currentIndex.get() / batchSize + 1,
-                            currentIndex.get() + 1, endIndex, entries.size(), failureCount.get()));
-
-                    currentIndex.set(endIndex);
-                    processNextBatch(entries, currentIndex, failureCount, batchSize, completionFuture);
-                })
-                .exceptionally(ex -> {
-                    logError("Critical error in batch", new Exception(ex));
-                    failureCount.incrementAndGet();
-                    currentIndex.set(endIndex);
-                    processNextBatch(entries, currentIndex, failureCount, batchSize, completionFuture);
-                    return null;
-                });
-    }
 
     public void startDownloads() {
         log("Starting downloads...");
@@ -144,6 +115,7 @@ public class GameFileManager {
         downloadedSize.set(0);
         totalFiles.set(0);
         totalSize.set(0);
+        downloadExecutor = Executors.newFixedThreadPool(appConfig.getConcurrentDownloads());
         fileDownloader.fetchServerAvailable().thenRun(() -> {
             Set<String> availableCustomDownloads = fileDownloader.getAvailableCustomDownloads();
 
@@ -182,6 +154,7 @@ public class GameFileManager {
                 if (appConfig.shouldDownloadCustomOnly()) {
                     catalog.getData().keySet().removeIf(key -> !availableCustomDownloads.contains(key));
                 }
+                    // catalog.getData().entrySet().removeIf(entry -> !availableCustomDownloads.contains(entry.getKey()) && entry.getValue().size < BYTES_TO_MB);
                 totalFiles.addAndGet(catalog.getData().size());
                 totalSize.addAndGet(catalog.getData().values().stream().mapToLong(item -> item.size).sum());
                 updateProgress();
@@ -229,6 +202,7 @@ public class GameFileManager {
 
     public void shutdown() {
         fileDownloader.shutdown();
+        downloadExecutor.shutdown();
     }
 
     private void updateProgress() {
