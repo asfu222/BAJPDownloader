@@ -12,8 +12,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
-import java.util.ArrayList;
-import java.util.List;
 
 public class ShizukuService extends IUserService.Stub {
     public ShizukuService() {
@@ -70,27 +68,6 @@ public class ShizukuService extends IUserService.Stub {
     @Override
     public long size(String path) {
         return new File(path).length();
-    }
-
-    @Override
-    public List<String> walk(String path) {
-        List<String> filePaths = new ArrayList<>();
-        File root = new File(path);
-        walkRecursive(root, filePaths);
-        return filePaths;
-    }
-
-    private void walkRecursive(File dir, List<String> filePaths) {
-        File[] files = dir.listFiles();
-        if (files != null) {
-            for (File file : files) {
-                if (file.isDirectory()) {
-                    walkRecursive(file, filePaths);
-                } else {
-                    filePaths.add(file.getAbsolutePath());
-                }
-            }
-        }
     }
 
     @Override

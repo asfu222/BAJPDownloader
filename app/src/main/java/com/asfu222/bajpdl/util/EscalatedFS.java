@@ -285,13 +285,7 @@ public abstract class EscalatedFS {
             return Files.walk(start);
         }
 
-        if (shizukuService != null) {
-            try {
-                return shizukuService.walk(start.toString()).stream().map(java.nio.file.Paths::get);
-            } catch (RemoteException e) {
-                throw new IOException("Shizuku walk failed", e);
-            }
-        } else if (rootAvailable) {
+        if (rootAvailable) {
             Process process = execEscalated("find " + start.toString() + " -type f -o -type d");
 
             java.io.BufferedReader reader = new java.io.BufferedReader(
@@ -313,7 +307,7 @@ public abstract class EscalatedFS {
                         }
                     });
         }
-        throw new IOException("No root or Shizuku available");
+        return Files.walk(start);
     }
 
     private static Process execEscalated(String command) throws IOException {
