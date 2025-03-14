@@ -81,7 +81,7 @@ public class AppConfig {
                 alwaysRedownload = json.getBoolean("replaceDownloadedFiles");
                 downloadCustomOnly = json.getBoolean("downloadCustomOnly");
                 JSONArray urlsArray = json.getJSONArray("serverUrls");
-                batchSize = json.optInt("batchSize", 30);
+                batchSize = json.optInt("batchSize", 10);
                 serverUrls = new ArrayList<>();
                 for (int i = 0; i < urlsArray.length(); i++) {
                     serverUrls.add(urlsArray.getString(i));
