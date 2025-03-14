@@ -1,9 +1,12 @@
 package com.asfu222.bajpdl;
 
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -20,6 +23,8 @@ import androidx.core.content.ContextCompat;
 import androidx.core.widget.NestedScrollView;
 
 import com.asfu222.bajpdl.core.GameFileManager;
+import com.asfu222.bajpdl.shizuku.IUserService;
+import com.asfu222.bajpdl.shizuku.ShizukuService;
 import com.asfu222.bajpdl.util.EscalatedFS;
 
 import java.io.PrintWriter;
@@ -50,7 +55,8 @@ public class MainActivity extends AppCompatActivity {
                     if (grantResult == PackageManager.PERMISSION_GRANTED) {
                         startDownloadButton.setEnabled(true);
                         startReplacementsButton.setEnabled(true);
-                        updateConsole("Shizuku permission granted, ready to use newProcess");
+                        updateConsole("Shizuku permission granted");
+                        bindShizukuUserService();
                     } else {
                         updateConsole("⚠️ Shizuku permission denied");
                         startDownloadButton.setEnabled(false);
@@ -73,6 +79,36 @@ public class MainActivity extends AppCompatActivity {
             startReplacementsButton.setEnabled(false);
         });
     };
+
+    private IUserService userService;
+    private final ServiceConnection userServiceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName component, IBinder binder) {
+            userService = IUserService.Stub.asInterface(binder);
+            EscalatedFS.setShizukuService(userService);
+            startDownloadButton.setEnabled(true);
+            startReplacementsButton.setEnabled(true);
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName component) {
+            userService = null;
+            EscalatedFS.setShizukuService(null);
+            startDownloadButton.setEnabled(false);
+            startReplacementsButton.setEnabled(false);
+        }
+    };
+
+    private Shizuku.UserServiceArgs createServiceArgs() {
+        return new Shizuku.UserServiceArgs(new ComponentName(this, ShizukuService.class))
+                .daemon(false)
+                .processNameSuffix("user_service")
+                .version(1);
+    }
+
+    private void bindShizukuUserService() {
+        Shizuku.bindUserService(createServiceArgs(), userServiceConnection);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -162,6 +198,24 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Add this to handle activity resume cases
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        // Re-check Shizuku status when activity resumes
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isRootAvailable() && !shizukuBinderReceived) {
+            updateConsole("Activity resumed, checking Shizuku status...");
+            if (Shizuku.pingBinder()) {
+                updateConsole("Shizuku service is available");
+                shizukuBinderReceived = true;
+                checkShizukuPermission();
+            } else {
+                updateConsole("Shizuku service still not available on resume");
+            }
+        }
+    }
+
     private boolean isRootAvailable() {
         try {
             Process process = Runtime.getRuntime().exec("su");
@@ -184,6 +238,7 @@ public class MainActivity extends AppCompatActivity {
                 updateConsole("Shizuku permission already granted");
                 startDownloadButton.setEnabled(true);
                 startReplacementsButton.setEnabled(true);
+                bindShizukuUserService();
             } else {
                 if (!permissionRequested) {
                     permissionRequested = true;
@@ -214,6 +269,14 @@ public class MainActivity extends AppCompatActivity {
             Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener);
             Shizuku.removeBinderReceivedListener(binderReceivedListener);
             Shizuku.removeBinderDeadListener(binderDeadListener);
+        }
+        if (userService != null) {
+            try {
+                Shizuku.unbindUserService(createServiceArgs(), userServiceConnection, true);
+            } catch (Exception e) {
+                System.out.println("Error unbinding Shizuku user service: " + e.getMessage());
+            }
+            userService = null;
         }
     }
 

@@ -1,8 +1,10 @@
 package com.asfu222.bajpdl.util;
 
 import android.os.Build;
+import android.os.ParcelFileDescriptor;
+import android.os.RemoteException;
 
-import com.asfu222.bajpdl.shizuku.ShizukuUtil;
+import com.asfu222.bajpdl.shizuku.IUserService;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -13,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.stream.Stream;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -24,9 +25,14 @@ import java.io.InputStreamReader;
  */
 public abstract class EscalatedFS {
     private static boolean rootAvailable;
+    private static IUserService shizukuService;
 
     public static void setRootAvailable(boolean value) {
         rootAvailable = value;
+    }
+
+    public static void setShizukuService(IUserService service) {
+        shizukuService = service;
     }
 
     private static boolean needsEscalation() {
@@ -38,10 +44,18 @@ public abstract class EscalatedFS {
             return Files.createDirectories(path);
         }
 
-        try {
-            execEscalated("mkdir -p " + path.toString()).waitFor();
-        } catch (InterruptedException e) {
-            throw new IOException("Failed to create directories: " + e.getMessage(), e);
+        if (rootAvailable) {
+            try {
+                execEscalated("mkdir -p " + path.toString()).waitFor();
+            } catch (InterruptedException e) {
+                throw new IOException("Failed to create directories: " + e.getMessage(), e);
+            }
+        } else if (shizukuService != null) {
+            try {
+                shizukuService.mkdirs(path.toString());
+            } catch (RemoteException e) {
+                throw new IOException("Shizuku mkdirs failed", e);
+            }
         }
         return path;
     }
@@ -50,15 +64,44 @@ public abstract class EscalatedFS {
         if (!needsEscalation()) {
             return Files.newOutputStream(path);
         }
-
-        return new ProcessOutputStream(execEscalated("cat > " + path.toString()));
+        if (rootAvailable) {
+            return new ProcessOutputStream(execEscalated("cat > " + path.toString()));
+        } else if (shizukuService != null) {
+            try {
+                String[] status = new String[1];
+                ParcelFileDescriptor pfd = shizukuService.openWrite(path.toString(), status);
+                if (status[0].equals("success")) {
+                    return new ParcelFileDescriptor.AutoCloseOutputStream(pfd);
+                } else {
+                    throw new IOException("Shizuku file write failed: " + status[0]);
+                }
+            } catch (RemoteException e) {
+                throw new IOException("Shizuku file write failed", e);
+            }
+        }
+        throw new IOException("No root or Shizuku available");
     }
 
     public static InputStream newInputStream(Path path) throws IOException {
         if (!needsEscalation()) {
             return Files.newInputStream(path);
         }
-        return new ProcessInputStream(execEscalated("cat " + path.toString()));
+        if (rootAvailable) {
+            return new ProcessInputStream(execEscalated("cat " + path.toString()));
+        } else if (shizukuService != null) {
+            try {
+                String[] status = new String[1];
+                ParcelFileDescriptor pfd = shizukuService.openRead(path.toString(), status);
+                if (status[0].equals("success")) {
+                    return new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+                } else {
+                    throw new IOException("Shizuku file read failed: " + status[0]);
+                }
+            } catch (RemoteException e) {
+                throw new IOException("Shizuku file write failed", e);
+            }
+        }
+        throw new IOException("No root or Shizuku available");
     }
 
     public static byte[] readAllBytes(Path path) throws IOException {
@@ -82,11 +125,22 @@ public abstract class EscalatedFS {
             Files.deleteIfExists(path);
             return;
         }
-
-        try {
-            execEscalated("rm -f " + path.toString()).waitFor();
-        } catch (InterruptedException e) {
-            throw new IOException("Failed to delete file: " + e.getMessage(), e);
+        if (rootAvailable) {
+            try {
+                execEscalated("rm -f " + path.toString()).waitFor();
+            } catch (InterruptedException e) {
+                throw new IOException("Failed to delete file: " + e.getMessage(), e);
+            }
+        } else if (shizukuService != null) {
+            try {
+                String[] status = new String[1];
+                shizukuService.deleteIfExists(path.toString(), status);
+                if (!status[0].equals("success")) {
+                    throw new IOException("Shizuku delete failed: " + status[0]);
+                }
+            } catch (RemoteException e) {
+                throw new IOException("Shizuku delete failed", e);
+            }
         }
     }
 
@@ -95,11 +149,20 @@ public abstract class EscalatedFS {
             return Files.exists(path);
         }
 
-        try {
-            return execEscalated("test -e " + path.toString()).waitFor() == 0;
-        } catch (InterruptedException e) {
-            throw new IOException("Failed to check file existence: " + e.getMessage(), e);
+        if (rootAvailable) {
+            try {
+                return execEscalated("test -e " + path.toString()).waitFor() == 0;
+            } catch (InterruptedException e) {
+                throw new IOException("Failed to check file existence: " + e.getMessage(), e);
+            }
+        } else if (shizukuService != null) {
+            try {
+                return shizukuService.exists(path.toString());
+            } catch (RemoteException e) {
+                throw new IOException("Shizuku delete failed", e);
+            }
         }
+        throw new IOException("No root or Shizuku available");
     }
 
     public static void copy(Path source, Path target, java.nio.file.CopyOption... options) throws IOException {
@@ -119,6 +182,23 @@ public abstract class EscalatedFS {
                 copyAttributes = true;
             } else if (option == StandardCopyOption.ATOMIC_MOVE) {
                 atomicMove = true;
+            }
+        }
+
+        if (!rootAvailable) {
+            if (shizukuService != null) {
+                try {
+                    String[] status = new String[1];
+                    shizukuService.copy(source.toString(), target.toString(), replaceExisting, copyAttributes, atomicMove, status);
+                    if (!status[0].equals("success")) {
+                        throw new IOException("Shizuku copy failed: " + status[0]);
+                    }
+                } catch (RemoteException e) {
+                    throw new IOException("Shizuku copy failed", e);
+                }
+                return;
+            } else {
+                throw new IOException("No root or Shizuku available");
             }
         }
 
@@ -164,35 +244,44 @@ public abstract class EscalatedFS {
     if (!needsEscalation()) {
         return Files.size(path);
     }
+    if (rootAvailable) {
 
-    Process process = null;
-    try {
-        String absolutePath = path.toAbsolutePath().toString();
-        process = execEscalated("stat -c %s " + absolutePath);
-        
-        String result = null;
-        String error = null;
-        
-        try (BufferedReader outReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-             BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
-            
-            result = outReader.readLine();
-            error = errReader.readLine();
-            
-            int exitCode = process.waitFor();
-            if (exitCode != 0) {
-                throw new IOException("Escalated stat failed with exit code " + exitCode + ": " + error);
+        Process process = null;
+        try {
+            String absolutePath = path.toAbsolutePath().toString();
+            process = execEscalated("stat -c %s " + absolutePath);
+
+            String result;
+            String error;
+
+            try (BufferedReader outReader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+                 BufferedReader errReader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
+
+                result = outReader.readLine();
+                error = errReader.readLine();
+
+                int exitCode = process.waitFor();
+                if (exitCode != 0) {
+                    throw new IOException("Escalated stat failed with exit code " + exitCode + ": " + error);
+                }
+
+                return Long.parseLong(result.trim());
             }
-            
-            return Long.parseLong(result.trim());
+        } catch (InterruptedException | NumberFormatException e) {
+            throw new IOException("Failed to get file size: " + e.getMessage(), e);
+        } finally {
+            if (process != null) {
+                process.destroy();
+            }
         }
-    } catch (InterruptedException | NumberFormatException e) {
-        throw new IOException("Failed to get file size: " + e.getMessage(), e);
-    } finally {
-        if (process != null) {
-            process.destroy();
+    } else if (shizukuService != null) {
+        try {
+            return shizukuService.size(path.toString());
+        } catch (RemoteException e) {
+            throw new IOException("Shizuku size failed", e);
         }
     }
+    throw new IOException("No root or Shizuku available");
 }
 
     public static Stream<Path> walk(Path start) throws IOException {
@@ -200,31 +289,40 @@ public abstract class EscalatedFS {
             return Files.walk(start);
         }
 
-        Process process = execEscalated("find " + start.toString() + " -type f -o -type d");
+        if (rootAvailable) {
+            Process process = execEscalated("find " + start.toString() + " -type f -o -type d");
 
-        java.io.BufferedReader reader = new java.io.BufferedReader(
-                new java.io.InputStreamReader(process.getInputStream()));
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(process.getInputStream()));
 
-        return reader.lines()
-                .filter(line -> !line.isEmpty())
-                .map(java.nio.file.Paths::get)
-                .onClose(() -> {
-                    try {
-                        reader.close();
-                        if (process.waitFor() != 0) {
+            return reader.lines()
+                    .filter(line -> !line.isEmpty())
+                    .map(java.nio.file.Paths::get)
+                    .onClose(() -> {
+                        try {
+                            reader.close();
+                            if (process.waitFor() != 0) {
+                                throw new java.io.UncheckedIOException(
+                                        new IOException("Failed to walk directory: " + start));
+                            }
+                        } catch (IOException | InterruptedException e) {
                             throw new java.io.UncheckedIOException(
-                                    new IOException("Failed to walk directory: " + start));
+                                    new IOException("Error closing resources: " + e.getMessage(), e));
                         }
-                    } catch (IOException | InterruptedException e) {
-                        throw new java.io.UncheckedIOException(
-                                new IOException("Error closing resources: " + e.getMessage(), e));
-                    }
-                });
+                    });
+        } else if (shizukuService != null) {
+            try {
+                return shizukuService.walk(start.toString()).stream().map(java.nio.file.Paths::get);
+            } catch (RemoteException e) {
+                throw new IOException("Shizuku walk failed", e);
+            }
+        }
+        throw new IOException("No root or Shizuku available");
     }
 
     private static Process execEscalated(String command) throws IOException {
         if (rootAvailable) return Runtime.getRuntime().exec(new String[]{"su", "-c", command});
-        return ShizukuUtil.executeProcess(command);
+        throw new IOException("Shizuku shell execution has been removed.");
     }
 
     static class ProcessOutputStream extends OutputStream {
