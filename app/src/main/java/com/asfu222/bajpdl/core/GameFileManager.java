@@ -19,8 +19,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
@@ -50,13 +48,13 @@ public class GameFileManager {
 
     public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
         return fileDownloader.downloadFile(dataPath, catalogEntry.getKey(),
-                catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError).thenCompose(downloadedFile -> {
+                catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError, catalogEntry.getValue()::getCrc).thenCompose(downloadedFile -> {
             if (downloadedFile == null) {
                 log("Failed to download file: " + catalogEntry.getKey());
                 return CompletableFuture.completedFuture(false);
             }
             try {
-                log("Copying file to game: " + catalogEntry.getKey());
+                // log("Copying file to game: " + catalogEntry.getKey());
                 FileUtils.copyToGame(downloadedFile, catalogEntry.getKey());
             } catch (Exception e) {
                 logError("Error processing file: " + catalogEntry.getKey(), e);
@@ -127,7 +125,7 @@ public class GameFileManager {
     }
 
     private CompletableFuture<Boolean> downloadAndProcessCatalog(String catalogPath, Set<String> availableCustomDownloads) {
-        return fileDownloader.downloadFile(dataPath, catalogPath, path -> true, true, this::logError).thenCompose(path -> {
+        return fileDownloader.downloadFile(dataPath, catalogPath, path -> true, true, this::logError, () -> 0).thenCompose(path -> {
             try {
                 log("Downloaded " + catalogPath + ", processing...");
                 MXCatalog catalog;
@@ -163,7 +161,7 @@ public class GameFileManager {
     }
 
     private CompletableFuture<Boolean> downloadAndCopyFile(String filePath) {
-        return fileDownloader.downloadFile(dataPath, filePath, path -> true, true, this::logError).thenCompose(path -> {
+        return fileDownloader.downloadFile(dataPath, filePath, path -> true, true, this::logError, () -> 0).thenCompose(path -> {
             try {
                 FileUtils.copyToGame(path, filePath);
                 return CompletableFuture.completedFuture(true);

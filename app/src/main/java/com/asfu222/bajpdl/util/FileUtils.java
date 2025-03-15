@@ -54,14 +54,27 @@ public abstract class FileUtils {
 
     private static final Set<String> STATIC_FILES = Set.of("TableCatalog.bytes", "MediaCatalog.bytes", "bundleDownloadInfo.json", "TableCatalog.hash", "MediaCatalog.hash", "bundleDownloadInfo.hash");
 
-    public static void copyToGame(Path file, String urlPath) throws IOException {
-        Path gamePath = Paths.get("/storage/emulated/0/Android/data/com.YostarJP.BlueArchive/files/")
+    public static Path getInGamePath(String urlPath) {
+        return Paths.get("/storage/emulated/0/Android/data/com.YostarJP.BlueArchive/files/")
                 .resolve(mapToInGamePath(urlPath));
-        String newName = file.getFileName().toString();
-        if (!newName.endsWith(".bundle") && !STATIC_FILES.contains(newName)) {
-            newName = calculateHash64(newName) + "_" + calculateCRC32(file);
+    }
+
+    public static String renameToInGameFormat(Path file) throws IOException {
+        return renameToInGameFormat(file.getFileName().toString(), calculateCRC32(file));
+    }
+
+    public static String renameToInGameFormat(String name, long crc) {
+        if (!name.endsWith(".bundle") && !STATIC_FILES.contains(name)) {
+            return calculateHash64(name) + "_" + crc;
         }
-        Path newPath = gamePath.getParent().resolve(newName);
+        return name;
+    }
+
+    public static void copyToGame(Path file, String urlPath) throws IOException {
+        Path newPath = getInGamePath(urlPath).getParent().resolveSibling(renameToInGameFormat(file));
+        if (file.toAbsolutePath().equals(newPath.toAbsolutePath())) {
+            return;
+        }
         if (!EscalatedFS.exists(newPath.getParent())) {
             EscalatedFS.createDirectories(newPath.getParent());
         }

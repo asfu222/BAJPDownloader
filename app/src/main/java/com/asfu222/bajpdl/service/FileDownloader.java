@@ -2,6 +2,7 @@ package com.asfu222.bajpdl.service;
 
 import com.asfu222.bajpdl.config.AppConfig;
 import com.asfu222.bajpdl.util.EscalatedFS;
+import com.asfu222.bajpdl.util.FileUtils;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -26,6 +27,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -51,14 +53,14 @@ public class FileDownloader {
     }
 
     public CompletableFuture<Path> downloadFile(Path basePath, String relPath,
-                                                Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler) {
+                                                Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler, LongSupplier crcSupplier) {
         return CompletableFuture.supplyAsync(() -> {
             int attempts = 5;
             int delay = 5000; // 5 seconds
             for (int i = 0; i < attempts; i++) {
                 Path result = null;
                 try {
-                    result = tryDownloadFromAllSources(basePath, relPath, verifier, replace);
+                    result = tryDownloadFromAllSources(basePath, relPath, verifier, replace, crcSupplier);
                 } catch (IOException e) {
                     handler.accept("Error downloading " + relPath, e);
                 }
@@ -77,20 +79,26 @@ public class FileDownloader {
     }
 
     private Path tryDownloadFromAllSources(Path basePath, String relPath,
-                                           Function<Path, Boolean> verifier, boolean replace) throws IOException {
+                                           Function<Path, Boolean> verifier, boolean replace, LongSupplier crcSupplier) throws IOException {
         List<String> serverUrls = appConfig.getServerUrls();
 
         // Try primary servers first
         for (String baseUrl : serverUrls) {
             String fileUrl = baseUrl + "/" + relPath;
             if (serverAvailable.get(baseUrl).contains(relPath)) {
+                Path downloadPath = basePath.resolve(relPath);
+                if (appConfig.shouldDownloadStraightToGame()) {
+                    downloadPath = FileUtils.getInGamePath(relPath).resolveSibling(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), crcSupplier.getAsLong()));
+                }
                 Path downloadedFile = downloadSingleFile(fileUrl,
-                        basePath.resolve(relPath), verifier, replace);
+                        downloadPath, verifier, replace);
 
                 if (verifier.apply(downloadedFile)) {
                     return downloadedFile;
                 }
-
+                System.out.println("From url " + baseUrl);
+                System.out.println("Expected: " + crcSupplier.getAsLong());
+                System.out.println("Practice: " + FileUtils.calculateCRC32(downloadedFile));
                 // Delete invalid file
                 EscalatedFS.deleteIfExists(downloadedFile);
             }
@@ -98,13 +106,19 @@ public class FileDownloader {
 
         // Try fallback server as last resort
         String fallbackUrl = appConfig.getFallbackUrl() + "/" + relPath;
+        Path downloadPath = basePath.resolve(relPath);
+        if (appConfig.shouldDownloadStraightToGame()) {
+            downloadPath = FileUtils.getInGamePath(relPath).resolveSibling(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), crcSupplier.getAsLong()));
+        }
         Path downloadedFile = downloadSingleFile(fallbackUrl,
-                basePath.resolve(relPath), verifier, replace);
+                downloadPath, verifier, replace);
 
         if (verifier.apply(downloadedFile)) {
             return downloadedFile;
         }
-
+        System.out.println("From fallback");
+        System.out.println("Expected: " + crcSupplier.getAsLong());
+        System.out.println("Practice: " + FileUtils.calculateCRC32(downloadedFile));
         // Delete invalid file
         EscalatedFS.deleteIfExists(downloadedFile);
 

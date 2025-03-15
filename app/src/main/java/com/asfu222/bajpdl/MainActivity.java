@@ -117,6 +117,7 @@ public class MainActivity extends AppCompatActivity {
         serverUrlsInput = findViewById(R.id.serverUrlsInput);
         Switch redownloadSwitch = findViewById(R.id.redownloadSwitch);
         Switch downloadCustomOnlySwitch = findViewById(R.id.downloadCustomOnlySwitch);
+        Switch downloadStraightToGameSwitch = findViewById(R.id.downloadStraightToGameSwitch);
         startDownloadButton = findViewById(R.id.startDownloadButton);
         startReplacementsButton = findViewById(R.id.startReplacementsButton);
         startReplacementsButton.setOnClickListener(v -> gameFileManager.startReplacements());
@@ -141,6 +142,12 @@ public class MainActivity extends AppCompatActivity {
         downloadCustomOnlySwitch.setChecked(gameFileManager.getAppConfig().shouldDownloadCustomOnly());
         downloadCustomOnlySwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             gameFileManager.getAppConfig().setDownloadCustomOnly(isChecked);
+            gameFileManager.getAppConfig().saveConfig();
+        });
+
+        downloadStraightToGameSwitch.setChecked(gameFileManager.getAppConfig().shouldDownloadStraightToGame());
+        downloadStraightToGameSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            gameFileManager.getAppConfig().setDownloadStraightToGame(isChecked);
             gameFileManager.getAppConfig().saveConfig();
         });
 

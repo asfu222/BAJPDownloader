@@ -23,10 +23,11 @@ import java.util.function.BiConsumer;
 public class AppConfig {
     private boolean alwaysRedownload = false;
     private boolean downloadCustomOnly = true;
+    private boolean downloadStraightToGame = true;
     private List<String> serverUrls;
     private final Context context;
     private String fallbackUrl;
-    private int concurrentDownloads = 10;
+    private int concurrentDownloads = 20;
 
     public AppConfig(Context context, BiConsumer<String, Exception> handler) {
         this.context = context;
@@ -70,16 +71,25 @@ public class AppConfig {
         return fallbackUrl;
     }
 
+    public boolean shouldDownloadStraightToGame() {
+        return downloadStraightToGame;
+    }
+
+    public void setDownloadStraightToGame(boolean downloadStraightToGame) {
+        this.downloadStraightToGame = downloadStraightToGame;
+    }
+
     private void loadConfig() {
         File configFile = new File(context.getExternalFilesDir("config"), "config.json");
         if (configFile.exists()) {
             try {
                 String content = new String(Files.readAllBytes(Paths.get(configFile.getPath())));
                 JSONObject json = new JSONObject(content);
-                alwaysRedownload = json.getBoolean("replaceDownloadedFiles");
-                downloadCustomOnly = json.getBoolean("downloadCustomOnly");
+                alwaysRedownload = json.optBoolean("replaceDownloadedFiles", false);
+                downloadCustomOnly = json.optBoolean("downloadCustomOnly", true);
                 JSONArray urlsArray = json.getJSONArray("serverUrls");
-                concurrentDownloads = json.optInt("concurrentDownloads", 10);
+                concurrentDownloads = json.optInt("concurrentDownloads", 20);
+                downloadStraightToGame = json.optBoolean("downloadStraightToGame", true);
                 serverUrls = new ArrayList<>();
                 for (int i = 0; i < urlsArray.length(); i++) {
                     serverUrls.add(urlsArray.getString(i));
@@ -173,6 +183,7 @@ private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
             JSONArray urlsArray = new JSONArray(serverUrls);
             json.put("serverUrls", urlsArray);
             json.put("concurrentDownloads", concurrentDownloads);
+            json.put("downloadStraightToGame", downloadStraightToGame);
             writer.write(json.toString());
         } catch (IOException | JSONException e) {
             e.printStackTrace();

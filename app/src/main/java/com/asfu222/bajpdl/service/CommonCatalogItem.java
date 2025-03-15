@@ -31,9 +31,13 @@ public class CommonCatalogItem {
 
     public boolean verifyIntegrity(Path file) {
         try {
-            return file.getFileName().toString().equals(name) && FileUtils.calculateCRC32(file) == crc && EscalatedFS.size(file) == size;
+            return FileUtils.calculateCRC32(file) == crc && EscalatedFS.size(file) == size;
         } catch (IOException e) {
             return false;
         }
+    }
+
+    public long getCrc() {
+        return crc;
     }
 }

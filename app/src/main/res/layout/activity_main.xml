@@ -38,7 +38,14 @@
         app:layout_constraintTop_toBottomOf="@id/redownloadSwitch"
         app:layout_constraintStart_toStartOf="parent"
         android:layout_marginTop="8dp" />
-
+    <Switch
+        android:id="@+id/downloadStraightToGameSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="直接下载至游戏目录"
+        app:layout_constraintTop_toBottomOf="@id/downloadCustomOnlySwitch"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginTop="8dp" />
     <!-- Batch Size Input -->
     <EditText
         android:id="@+id/batchSizeInput"
@@ -46,7 +53,7 @@
         android:layout_height="wrap_content"
         android:hint="下载线路数"
         android:inputType="number"
-        app:layout_constraintTop_toBottomOf="@id/downloadCustomOnlySwitch"
+        app:layout_constraintTop_toBottomOf="@id/downloadStraightToGameSwitch"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="8dp" />
