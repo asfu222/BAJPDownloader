@@ -1,6 +1,8 @@
 package com.asfu222.bajpdl.core;
 
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 
 import com.asfu222.bajpdl.MainActivity;
 import com.asfu222.bajpdl.config.AppConfig;
@@ -120,7 +122,15 @@ public class GameFileManager {
             );
 
             CompletableFuture.allOf(catalogFutures.toArray(new CompletableFuture[0]))
-                    .thenAccept(v -> log("All downloads completed"));
+                    .thenAccept(v -> {
+                        log("All downloads completed");
+                        if (appConfig.shouldOpenBA()) {
+                            Intent intent = new Intent();
+                            intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", "com.yostarjp.bluearchive.MxUnityPlayerActivity"));
+                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            appContext.startActivity(intent);
+                        }
+                    });
         });
     }
 

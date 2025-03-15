@@ -24,6 +24,8 @@ public class AppConfig {
     private boolean alwaysRedownload = false;
     private boolean downloadCustomOnly = true;
     private boolean downloadStraightToGame = true;
+
+    private boolean openBA = true;
     private List<String> serverUrls;
     private final Context context;
     private String fallbackUrl;
@@ -59,6 +61,14 @@ public class AppConfig {
         this.concurrentDownloads = concurrentDownloads;
     }
 
+    public boolean shouldOpenBA() {
+        return openBA;
+    }
+
+    public void setOpenBA(boolean openBA) {
+        this.openBA = openBA;
+    }
+
     public List<String> getServerUrls() {
         return serverUrls;
     }
@@ -90,6 +100,7 @@ public class AppConfig {
                 JSONArray urlsArray = json.getJSONArray("serverUrls");
                 concurrentDownloads = json.optInt("concurrentDownloads", 20);
                 downloadStraightToGame = json.optBoolean("downloadStraightToGame", true);
+                openBA = json.optBoolean("openBA", true);
                 serverUrls = new ArrayList<>();
                 for (int i = 0; i < urlsArray.length(); i++) {
                     serverUrls.add(urlsArray.getString(i));
@@ -184,6 +195,7 @@ private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
             json.put("serverUrls", urlsArray);
             json.put("concurrentDownloads", concurrentDownloads);
             json.put("downloadStraightToGame", downloadStraightToGame);
+            json.put("openBA", openBA);
             writer.write(json.toString());
         } catch (IOException | JSONException e) {
             e.printStackTrace();

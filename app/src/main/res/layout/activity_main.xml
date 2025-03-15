@@ -46,6 +46,15 @@
         app:layout_constraintTop_toBottomOf="@id/downloadCustomOnlySwitch"
         app:layout_constraintStart_toStartOf="parent"
         android:layout_marginTop="8dp" />
+		
+	<Switch
+        android:id="@+id/openBASwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="更新后打开蔚蓝档案"
+        app:layout_constraintTop_toBottomOf="@id/downloadStraightToGameSwitch"
+        app:layout_constraintStart_toStartOf="parent"
+        android:layout_marginTop="8dp" />
     <!-- Batch Size Input -->
     <EditText
         android:id="@+id/batchSizeInput"
@@ -53,7 +62,7 @@
         android:layout_height="wrap_content"
         android:hint="下载线路数"
         android:inputType="number"
-        app:layout_constraintTop_toBottomOf="@id/downloadStraightToGameSwitch"
+        app:layout_constraintTop_toBottomOf="@id/openBASwitch"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="8dp" />
@@ -63,7 +72,7 @@
         android:id="@+id/startDownloadButton"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:text="下载并替换"
+        android:text="更新资源"
         app:layout_constraintTop_toBottomOf="@id/batchSizeInput"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toStartOf="@id/startReplacementsButton"

@@ -27,8 +27,10 @@ import com.asfu222.bajpdl.shizuku.IUserService;
 import com.asfu222.bajpdl.shizuku.ShizukuService;
 import com.asfu222.bajpdl.util.EscalatedFS;
 
+import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 
@@ -118,6 +120,7 @@ public class MainActivity extends AppCompatActivity {
         Switch redownloadSwitch = findViewById(R.id.redownloadSwitch);
         Switch downloadCustomOnlySwitch = findViewById(R.id.downloadCustomOnlySwitch);
         Switch downloadStraightToGameSwitch = findViewById(R.id.downloadStraightToGameSwitch);
+        Switch openBA = findViewById(R.id.openBASwitch);
         startDownloadButton = findViewById(R.id.startDownloadButton);
         startReplacementsButton = findViewById(R.id.startReplacementsButton);
         startReplacementsButton.setOnClickListener(v -> gameFileManager.startReplacements());
@@ -148,6 +151,12 @@ public class MainActivity extends AppCompatActivity {
         downloadStraightToGameSwitch.setChecked(gameFileManager.getAppConfig().shouldDownloadStraightToGame());
         downloadStraightToGameSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
             gameFileManager.getAppConfig().setDownloadStraightToGame(isChecked);
+            gameFileManager.getAppConfig().saveConfig();
+        });
+
+        openBA.setChecked(gameFileManager.getAppConfig().shouldOpenBA());
+        openBA.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            gameFileManager.getAppConfig().setOpenBA(isChecked);
             gameFileManager.getAppConfig().saveConfig();
         });
 
@@ -288,6 +297,20 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startDownloads() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !shizukuBinderReceived &&
+                Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED && !isRootAvailable()) {
+            updateConsole("错误：请先给与本软件Root或Shizuku权限。");
+            return;
+        }
+        try {
+            if (!EscalatedFS.exists(Paths.get("/storage/emulated/0/Android/data/com.YostarJP.BlueArchive/files/AssetBundls"))) {
+                updateConsole("错误：请先打开蔚蓝档案并等待加载完成");
+                return;
+            }
+        } catch (IOException e) {
+            logErrorToConsole("Error checking Blue Archive installation", e);
+            return;
+        }
         progressBar.setVisibility(View.VISIBLE);
         progressText.setVisibility(View.VISIBLE);
         progressBar.setProgress(0);
@@ -300,12 +323,6 @@ public class MainActivity extends AppCompatActivity {
         int batchSize = Math.max(Integer.parseInt(batchSizeInput.getText().toString()), 1);
         gameFileManager.getAppConfig().setConcurrentDownloads(batchSize);
         gameFileManager.getAppConfig().saveConfig();
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !shizukuBinderReceived &&
-                Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED && !isRootAvailable()) {
-            updateConsole("Error: Root not available or Shizuku permission not granted. Please check permissions.");
-            return;
-        }
 
         gameFileManager.startDownloads();
     }
