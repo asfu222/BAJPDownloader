@@ -71,7 +71,7 @@ public abstract class FileUtils {
     }
 
     public static void copyToGame(Path file, String urlPath) throws IOException {
-        Path newPath = getInGamePath(urlPath).getParent().resolveSibling(renameToInGameFormat(file));
+        Path newPath = getInGamePath(urlPath).getParent().resolve(renameToInGameFormat(file));
         if (file.toAbsolutePath().equals(newPath.toAbsolutePath())) {
             return;
         }

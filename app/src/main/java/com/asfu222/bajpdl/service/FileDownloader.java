@@ -88,7 +88,7 @@ public class FileDownloader {
             if (serverAvailable.get(baseUrl).contains(relPath)) {
                 Path downloadPath = basePath.resolve(relPath);
                 if (appConfig.shouldDownloadStraightToGame()) {
-                    downloadPath = FileUtils.getInGamePath(relPath).resolveSibling(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), crcSupplier.getAsLong()));
+                    downloadPath = FileUtils.getInGamePath(relPath).getParent().resolve(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), crcSupplier.getAsLong()));
                 }
                 Path downloadedFile = downloadSingleFile(fileUrl,
                         downloadPath, verifier, replace);
