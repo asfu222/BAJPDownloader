@@ -33,7 +33,7 @@ import okhttp3.Response;
 import okhttp3.ResponseBody;
 
 public class FileDownloader {
-    private final ExecutorService executorService;
+    private ExecutorService executorService;
     private final AppConfig appConfig;
     private static final int CONNECTION_TIMEOUT = 15000; // 15 seconds
     private static final int READ_TIMEOUT = 15000; // 15 seconds
@@ -42,7 +42,12 @@ public class FileDownloader {
 
     public FileDownloader(AppConfig appConfig) {
         this.appConfig = appConfig;
-        this.executorService = Executors.newFixedThreadPool(20);
+        this.executorService = Executors.newFixedThreadPool(appConfig.getConcurrentDownloads());
+    }
+
+    public void updateThreadPool() {
+        executorService.shutdown();
+        executorService = Executors.newFixedThreadPool(appConfig.getConcurrentDownloads());
     }
 
     public CompletableFuture<Path> downloadFile(Path basePath, String relPath,
@@ -103,7 +108,7 @@ public class FileDownloader {
         // Delete invalid file
         EscalatedFS.deleteIfExists(downloadedFile);
 
-        throw new IOException("Failed to download " + relPath);
+        throw new IOException("Failed to download " + relPath + ": No valid CRC found");
     }
     private static final OkHttpClient client = new OkHttpClient.Builder()
             .connectTimeout(10000, java.util.concurrent.TimeUnit.MILLISECONDS) // 10 seconds

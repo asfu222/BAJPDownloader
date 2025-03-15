@@ -48,33 +48,26 @@ public class GameFileManager {
         return appConfig;
     }
 
-    private ExecutorService downloadExecutor;
-
     public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
-        return CompletableFuture.supplyAsync(() -> {
+        return fileDownloader.downloadFile(dataPath, catalogEntry.getKey(),
+                catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError).thenCompose(downloadedFile -> {
+            if (downloadedFile == null) {
+                log("Failed to download file: " + catalogEntry.getKey());
+                return CompletableFuture.completedFuture(false);
+            }
             try {
-                Path downloadedFile = fileDownloader.downloadFile(dataPath, catalogEntry.getKey(),
-                                catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError)
-                        .join(); // Block until completion (reduces uncontrolled task creation)
-
-                if (downloadedFile == null) {
-                    log("Failed to download file: " + catalogEntry.getKey());
-                    return false;
-                }
-
                 log("Copying file to game: " + catalogEntry.getKey());
                 FileUtils.copyToGame(downloadedFile, catalogEntry.getKey());
-
-                downloadedFiles.incrementAndGet();
-                downloadedSize.addAndGet(catalogEntry.getValue().size);
-                updateProgress();
-                return true;
-
             } catch (Exception e) {
                 logError("Error processing file: " + catalogEntry.getKey(), e);
-                return false;
+                return CompletableFuture.completedFuture(false);
             }
-        }, downloadExecutor);
+
+            downloadedFiles.incrementAndGet();
+            downloadedSize.addAndGet(catalogEntry.getValue().size);
+            updateProgress();
+            return CompletableFuture.completedFuture(true);
+        });
     }
 
     public CompletableFuture<Boolean> processFiles(Map<String, CommonCatalogItem> catalog) {
@@ -115,7 +108,7 @@ public class GameFileManager {
         downloadedSize.set(0);
         totalFiles.set(0);
         totalSize.set(0);
-        downloadExecutor = Executors.newFixedThreadPool(appConfig.getConcurrentDownloads());
+        fileDownloader.updateThreadPool();
         fileDownloader.fetchServerAvailable().thenRun(() -> {
             Set<String> availableCustomDownloads = fileDownloader.getAvailableCustomDownloads();
 
@@ -202,7 +195,6 @@ public class GameFileManager {
 
     public void shutdown() {
         fileDownloader.shutdown();
-        downloadExecutor.shutdown();
     }
 
     private void updateProgress() {
