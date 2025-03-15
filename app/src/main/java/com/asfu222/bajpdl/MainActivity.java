@@ -189,20 +189,20 @@ public class MainActivity extends AppCompatActivity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             startDownloadButton.setEnabled(false);
             startReplacementsButton.setEnabled(false);
-            updateConsole("Checking for Shizuku...");
+            updateConsole("检测Shizuku服务是否运行...");
 
             Shizuku.addBinderReceivedListener(binderReceivedListener);
             Shizuku.addBinderDeadListener(binderDeadListener);
             Shizuku.addRequestPermissionResultListener(shizukuPermissionListener);
 
             if (Shizuku.pingBinder()) {
-                updateConsole("Shizuku service is running");
+                updateConsole("Shizuku服务已运行");
                 shizukuBinderReceived = true;
                 checkShizukuPermission();
             } else {
-                updateConsole("Shizuku service is not running");
+                updateConsole("Shizuku服务未运行");
                 if (isRootAvailable()) {
-                    updateConsole("Root access available");
+                    updateConsole("检测到Root权限");
                     EscalatedFS.setRootAvailable(true);
                     startDownloadButton.setEnabled(true);
                     startReplacementsButton.setEnabled(true);
@@ -220,13 +220,13 @@ public class MainActivity extends AppCompatActivity {
 
         // Re-check Shizuku status when activity resumes
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isRootAvailable() && !shizukuBinderReceived) {
-            updateConsole("Activity resumed, checking Shizuku status...");
+            updateConsole("活动恢复，正在检查Shizuku服务状态...");
             if (Shizuku.pingBinder()) {
-                updateConsole("Shizuku service is available");
+                updateConsole("Shizuku服务已运行");
                 shizukuBinderReceived = true;
                 checkShizukuPermission();
             } else {
-                updateConsole("Shizuku service still not available on resume");
+                updateConsole("Shizuku服务未运行");
             }
         }
     }
@@ -246,21 +246,20 @@ public class MainActivity extends AppCompatActivity {
     private void checkShizukuPermission() {
         try {
             int permissionResult = Shizuku.checkSelfPermission();
-            updateConsole("Checking Shizuku permission: " +
-                    (permissionResult == PackageManager.PERMISSION_GRANTED ? "GRANTED" : "NOT GRANTED"));
+            updateConsole("检测Shizuku权限: " +
+                    (permissionResult == PackageManager.PERMISSION_GRANTED ? "已允许" : "未允许"));
 
             if (permissionResult == PackageManager.PERMISSION_GRANTED) {
-                updateConsole("Shizuku permission already granted");
                 startDownloadButton.setEnabled(true);
                 startReplacementsButton.setEnabled(true);
                 bindShizukuUserService();
             } else {
                 if (!permissionRequested) {
                     permissionRequested = true;
-                    updateConsole("Requesting Shizuku permission...");
+                    updateConsole("正在请求Shizuku权限...");
                     Shizuku.requestPermission(REQUEST_CODE);
                 } else {
-                    updateConsole("Permission already requested once, request again...");
+                    updateConsole("再次请求Shizuku权限...");
                     // Try requesting again after a short delay
                     permissionRequested = false;
                     startDownloadButton.postDelayed(() -> {
@@ -270,7 +269,7 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         } catch (Exception e) {
-            logErrorToConsole("Error checking Shizuku permission", e);
+            logErrorToConsole("检测Shizuku权限时报错", e);
             startDownloadButton.setEnabled(false);
             startReplacementsButton.setEnabled(false);
         }
@@ -289,7 +288,7 @@ public class MainActivity extends AppCompatActivity {
             try {
                 Shizuku.unbindUserService(createServiceArgs(), userServiceConnection, true);
             } catch (Exception e) {
-                System.out.println("Error unbinding Shizuku user service: " + e.getMessage());
+                System.out.println("挂载Shizuku用户服务时报错: " + e.getMessage());
             }
             userService = null;
         }
@@ -308,13 +307,13 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
         } catch (IOException e) {
-            logErrorToConsole("Error checking Blue Archive installation", e);
+            logErrorToConsole("检测蔚蓝档案安装状态时报错", e);
             return;
         }
         progressBar.setVisibility(View.VISIBLE);
         progressText.setVisibility(View.VISIBLE);
         progressBar.setProgress(0);
-        progressText.setText("Progress: 0%");
+        progressText.setText("进度: 0%");
         consoleOutput.setText("");
 
         String serverUrlsText = serverUrlsInput.getText().toString();
@@ -340,9 +339,9 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_CODE) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                updateConsole("Storage permission granted");
+                updateConsole("已获取存储权限");
             } else {
-                updateConsole("Error: Storage permission denied");
+                updateConsole("未获取存储权限");
                 startDownloadButton.setEnabled(false);
                 startReplacementsButton.setEnabled(false);
             }
@@ -377,7 +376,7 @@ public class MainActivity extends AppCompatActivity {
             progressText.setVisibility(View.VISIBLE);
             int progress = totalBytes > 0 ? (int) ((downloadedBytes * 100) / totalBytes) : 0;
             progressBar.setProgress(progress);
-            progressText.setText("Progress: " + progress + "%" + " (" + downloadedFiles + "/" + totalFiles + " Files, " + downloadedBytes + "/" + totalBytes + " MB)");
+            progressText.setText("进度: " + progress + "%" + " (" + downloadedFiles + "/" + totalFiles + " 文件, " + downloadedBytes + "/" + totalBytes + " MB)");
             if (downloadedFiles == totalFiles && downloadedBytes == totalBytes) {
                 progressBar.setVisibility(View.GONE);
                 progressText.setVisibility(View.GONE);

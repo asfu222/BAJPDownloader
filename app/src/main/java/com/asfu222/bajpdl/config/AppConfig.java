@@ -166,9 +166,9 @@ private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
                 System.err.println("Error fetching fallback URL (Attempt " + attempt + "): " + e.getMessage());
 
                 if (attempt == MAX_RETRIES) {
-                    StringBuilder errorMessage = new StringBuilder("Failed to fetch fallback URL after " + MAX_RETRIES + " attempts.\n");
+                    StringBuilder errorMessage = new StringBuilder("获取备用资源网址时报错。已尝试 " + MAX_RETRIES + " 次。\n");
                     for (int i = 0; i < errorList.size(); i++) {
-                        errorMessage.append("Attempt ").append(i + 1).append(": ").append(errorList.get(i).getMessage()).append("\n");
+                        errorMessage.append("尝试 ").append(i + 1).append(": ").append(errorList.get(i).getMessage()).append("\n");
                     }
                     handler.accept(null, new IOException(errorMessage.toString(), errorList.get(0))); // Pass error to handler
                 }

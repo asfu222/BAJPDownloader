@@ -48,13 +48,13 @@ public abstract class EscalatedFS {
             try {
                 shizukuService.mkdirs(path.toString());
             } catch (RemoteException e) {
-                throw new IOException("Shizuku mkdirs failed", e);
+                throw new IOException("Shizuku 创建文件夹时报错：", e);
             }
         } else if (rootAvailable) {
             try {
                 execEscalated("mkdir -p " + path.toString()).waitFor();
             } catch (InterruptedException e) {
-                throw new IOException("Failed to create directories: " + e.getMessage(), e);
+                throw new IOException("创建文件夹时报错：" + e.getMessage(), e);
             }
         }
         return path;
@@ -71,15 +71,15 @@ public abstract class EscalatedFS {
                 if (status[0].equals("success")) {
                     return new ParcelFileDescriptor.AutoCloseOutputStream(pfd);
                 } else {
-                    throw new IOException("Shizuku file write failed: " + status[0]);
+                    throw new IOException("Shizuku 文件写入错误: " + status[0]);
                 }
             } catch (RemoteException e) {
-                throw new IOException("Shizuku file write failed", e);
+                throw new IOException("Shizuku 文件写入错误", e);
             }
         } else if (rootAvailable) {
             return new ProcessOutputStream(execEscalated("cat > " + path.toString()));
         }
-        throw new IOException("No root or Shizuku available");
+        throw new IOException("无可用的 root 或 Shizuku 权限");
     }
 
     public static InputStream newInputStream(Path path) throws IOException {
@@ -93,15 +93,15 @@ public abstract class EscalatedFS {
                 if (status[0].equals("success")) {
                     return new ParcelFileDescriptor.AutoCloseInputStream(pfd);
                 } else {
-                    throw new IOException("Shizuku file read failed: " + status[0]);
+                    throw new IOException("Shizuku 文件读取错误: " + status[0]);
                 }
             } catch (RemoteException e) {
-                throw new IOException("Shizuku file read failed", e);
+                throw new IOException("Shizuku 文件读取错误", e);
             }
         } else if (rootAvailable) {
             return new ProcessInputStream(execEscalated("cat " + path.toString()));
         }
-        throw new IOException("No root or Shizuku available");
+        throw new IOException("无可用的 root 或 Shizuku 权限");
     }
 
     public static byte[] readAllBytes(Path path) throws IOException {
@@ -130,16 +130,16 @@ public abstract class EscalatedFS {
                 String[] status = new String[1];
                 shizukuService.deleteIfExists(path.toString(), status);
                 if (!status[0].equals("success")) {
-                    throw new IOException("Shizuku delete failed: " + status[0]);
+                    throw new IOException("Shizuku 文件删除错误: " + status[0]);
                 }
             } catch (RemoteException e) {
-                throw new IOException("Shizuku delete failed", e);
+                throw new IOException("Shizuku 文件删除错误", e);
             }
         } else if (rootAvailable) {
             try {
                 execEscalated("rm -f " + path.toString()).waitFor();
             } catch (InterruptedException e) {
-                throw new IOException("Failed to delete file: " + e.getMessage(), e);
+                throw new IOException("文件删除错误: " + e.getMessage(), e);
             }
         }
     }
@@ -153,16 +153,16 @@ public abstract class EscalatedFS {
             try {
                 return shizukuService.exists(path.toString());
             } catch (RemoteException e) {
-                throw new IOException("Shizuku exists check failed", e);
+                throw new IOException("Shizuku 文件检测错误", e);
             }
         } else if (rootAvailable) {
             try {
                 return execEscalated("test -e " + path.toString()).waitFor() == 0;
             } catch (InterruptedException e) {
-                throw new IOException("Failed to check file existence: " + e.getMessage(), e);
+                throw new IOException("文件检测错误: " + e.getMessage(), e);
             }
         }
-        throw new IOException("No root or Shizuku available");
+        throw new IOException("无可用的 root 或 Shizuku 权限");
     }
 
     public static void copy(Path source, Path target, java.nio.file.CopyOption... options) throws IOException {
@@ -190,10 +190,10 @@ public abstract class EscalatedFS {
                 String[] status = new String[1];
                 shizukuService.copy(source.toString(), target.toString(), replaceExisting, copyAttributes, atomicMove, status);
                 if (!status[0].equals("success")) {
-                    throw new IOException("Shizuku copy failed: " + status[0]);
+                    throw new IOException("Shizuku 复制错误: " + status[0]);
                 }
             } catch (RemoteException e) {
-                throw new IOException("Shizuku copy failed", e);
+                throw new IOException("Shizuku 复制错误", e);
             }
         } else if (rootAvailable) {
             StringBuilder command = new StringBuilder();
@@ -226,14 +226,14 @@ public abstract class EscalatedFS {
                     try (java.io.InputStream errorStream = process.getErrorStream();
                          java.util.Scanner scanner = new java.util.Scanner(errorStream).useDelimiter("\\A")) {
                         String errorMessage = scanner.hasNext() ? scanner.next() : "Unknown error";
-                        throw new IOException("Failed to copy file: " + errorMessage.trim());
+                        throw new IOException("复制错误: " + errorMessage.trim());
                     }
                 }
             } catch (InterruptedException e) {
-                throw new IOException("File operation interrupted: " + e.getMessage(), e);
+                throw new IOException("文件操作被打断: " + e.getMessage(), e);
             }
         } else {
-            throw new IOException("No root or Shizuku available");
+            throw new IOException("无可用的 root 或 Shizuku 权限");
         }
     }
 
@@ -245,7 +245,7 @@ public abstract class EscalatedFS {
             try {
                 return shizukuService.size(path.toString());
             } catch (RemoteException e) {
-                throw new IOException("Shizuku size failed", e);
+                throw new IOException("Shizuku 获取文件大小时报错", e);
             }
         } else if (rootAvailable) {
             Process process = null;
@@ -264,20 +264,20 @@ public abstract class EscalatedFS {
 
                     int exitCode = process.waitFor();
                     if (exitCode != 0) {
-                        throw new IOException("Escalated stat failed with exit code " + exitCode + ": " + error);
+                        throw new IOException("获取文件大小时报错。错误代码" + exitCode + ": " + error);
                     }
 
                     return Long.parseLong(result.trim());
                 }
             } catch (InterruptedException | NumberFormatException e) {
-                throw new IOException("Failed to get file size: " + e.getMessage(), e);
+                throw new IOException("获取文件大小失败: " + e.getMessage(), e);
             } finally {
                 if (process != null) {
                     process.destroy();
                 }
             }
         }
-        throw new IOException("No root or Shizuku available");
+        throw new IOException("无可用的 root 或 Shizuku 权限");
     }
 
     public static Stream<Path> walk(Path start) throws IOException {

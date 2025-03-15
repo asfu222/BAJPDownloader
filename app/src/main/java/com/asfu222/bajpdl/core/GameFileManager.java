@@ -52,14 +52,14 @@ public class GameFileManager {
         return fileDownloader.downloadFile(dataPath, catalogEntry.getKey(),
                 catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError, catalogEntry.getValue()::getCrc).thenCompose(downloadedFile -> {
             if (downloadedFile == null) {
-                log("Failed to download file: " + catalogEntry.getKey());
+                log("下载此文件失败: " + catalogEntry.getKey());
                 return CompletableFuture.completedFuture(false);
             }
             try {
                 // log("Copying file to game: " + catalogEntry.getKey());
                 FileUtils.copyToGame(downloadedFile, catalogEntry.getKey());
             } catch (Exception e) {
-                logError("Error processing file: " + catalogEntry.getKey(), e);
+                logError("处理文件时报错: " + catalogEntry.getKey(), e);
                 return CompletableFuture.completedFuture(false);
             }
 
@@ -71,7 +71,7 @@ public class GameFileManager {
     }
 
     public CompletableFuture<Boolean> processFiles(Map<String, CommonCatalogItem> catalog) {
-        log("Processing " + catalog.size() + " files");
+        log("正在处理 " + catalog.size() + " 个文件");
 
         CompletableFuture<Boolean> completionFuture = new CompletableFuture<>();
 
@@ -88,11 +88,11 @@ public class GameFileManager {
         CompletableFuture.allOf(downloadFutures.toArray(new CompletableFuture[0]))
                 .thenAccept(v -> {
                     long failures = downloadFutures.stream().filter(future -> !future.join()).count();
-                    log("All files processed. Failed: " + failures);
+                    log("所有文件处理完毕。 失败文件数: " + failures);
                     completionFuture.complete(failures == 0);
                 })
                 .exceptionally(ex -> {
-                    logError("Critical error processing files", new Exception(ex));
+                    logError("处理文件错误", new Exception(ex));
                     completionFuture.complete(false); // If an error occurs, complete the future with failure
                     return null;
                 });
@@ -103,7 +103,7 @@ public class GameFileManager {
 
 
     public void startDownloads() {
-        log("Starting downloads...");
+        log("开始下载更新...");
         downloadedFiles.set(0);
         downloadedSize.set(0);
         totalFiles.set(0);
@@ -123,7 +123,7 @@ public class GameFileManager {
 
             CompletableFuture.allOf(catalogFutures.toArray(new CompletableFuture[0]))
                     .thenAccept(v -> {
-                        log("All downloads completed");
+                        log("已完成更新");
                         if (appConfig.shouldOpenBA()) {
                             Intent intent = new Intent();
                             intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", "com.yostarjp.bluearchive.MxUnityPlayerActivity"));
@@ -137,7 +137,7 @@ public class GameFileManager {
     private CompletableFuture<Boolean> downloadAndProcessCatalog(String catalogPath, Set<String> availableCustomDownloads) {
         return fileDownloader.downloadFile(dataPath, catalogPath, path -> true, true, this::logError, () -> 0).thenCompose(path -> {
             try {
-                log("Downloaded " + catalogPath + ", processing...");
+                log("已下载 " + catalogPath + ", 处理中...");
                 MXCatalog catalog;
                 switch (catalogPath) {
                     case "TableBundles/TableCatalog.bytes":
@@ -159,12 +159,12 @@ public class GameFileManager {
                 totalFiles.addAndGet(catalog.getData().size());
                 totalSize.addAndGet(catalog.getData().values().stream().mapToLong(item -> item.size).sum());
                 updateProgress();
-                log(catalogPath + " contains " + catalog.getData().size() + " files");
+                log(catalogPath + " 含有 " + catalog.getData().size() + " 个文件");
 
                 FileUtils.copyToGame(path, catalogPath);
                 return processFiles(catalog.getData());
             } catch (IOException | JSONException ex) {
-                logError("Error processing " + catalogPath, ex);
+                logError("处理时报错： " + catalogPath, ex);
                 return CompletableFuture.completedFuture(false);
             }
         });
@@ -176,7 +176,7 @@ public class GameFileManager {
                 FileUtils.copyToGame(path, filePath);
                 return CompletableFuture.completedFuture(true);
             } catch (IOException e) {
-                logError("Error copying " + filePath + " to game", e);
+                logError("复制此文件到游戏时报错： " + filePath, e);
                 return CompletableFuture.completedFuture(false);
             }
         });
@@ -190,12 +190,12 @@ public class GameFileManager {
                                 try {
                                     Path relPath = dataPath.relativize(file);
                                     FileUtils.copyToGame(file, relPath.toString());
-                                    log("Successfully copied file to game: " + relPath);
+                                    log("已复制至游戏: " + relPath);
                                 } catch (IOException e) {
-                                    logError("Error copying file to game", e);
+                                    logError("复制到游戏时报错", e);
                                 }
                             })).toArray(CompletableFuture[]::new))
-                    .thenRun(() -> log("Done copying all files"));
+                    .thenRun(() -> log("完成替换"));
         } catch (IOException e) {
             logError("Error walking directory", e);
         }
