@@ -11,8 +11,9 @@ public class CommonCatalogItem {
     public final String name;
     public final long size;
     public final long crc;
-
     public final boolean isSplit;
+
+    public static final CommonCatalogItem EMPTY = new CommonCatalogItem("Empty (dummy)", -1, -1, false);
     public CommonCatalogItem(String name, long size, long crc, boolean isSplit) {
         this.name = name;
         this.size = size;
@@ -35,9 +36,5 @@ public class CommonCatalogItem {
         } catch (IOException e) {
             return false;
         }
-    }
-
-    public long getCrc() {
-        return crc;
     }
 }

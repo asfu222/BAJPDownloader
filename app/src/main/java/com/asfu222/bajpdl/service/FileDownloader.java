@@ -54,14 +54,14 @@ public class FileDownloader {
     }
 
     public CompletableFuture<Path> downloadFile(Path basePath, String relPath,
-                                                Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler, LongSupplier crcSupplier) {
+                                                Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler, CommonCatalogItem item) {
         return CompletableFuture.supplyAsync(() -> {
             int attempts = 5;
             int delay = 5000; // 5 seconds
             for (int i = 0; i < attempts; i++) {
                 Path result = null;
                 try {
-                    result = tryDownloadFromAllSources(basePath, relPath, verifier, replace, crcSupplier);
+                    result = tryDownloadFromAllSources(basePath, relPath, verifier, replace, item);
                 } catch (IOException e) {
                     handler.accept("Error downloading " + relPath, e);
                 }
@@ -80,7 +80,7 @@ public class FileDownloader {
     }
 
     private Path tryDownloadFromAllSources(Path basePath, String relPath,
-                                           Function<Path, Boolean> verifier, boolean replace, LongSupplier crcSupplier) throws IOException {
+                                           Function<Path, Boolean> verifier, boolean replace, CommonCatalogItem item) throws IOException {
         List<String> serverUrls = appConfig.getServerUrls();
         StringBuilder crcLog = new StringBuilder();
         // Try primary servers first
@@ -89,7 +89,7 @@ public class FileDownloader {
             if (serverAvailable.get(baseUrl).contains(relPath)) {
                 Path downloadPath = basePath.resolve(relPath);
                 if (appConfig.shouldDownloadStraightToGame()) {
-                    downloadPath = FileUtils.getInGamePath(relPath).getParent().resolve(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), crcSupplier.getAsLong()));
+                    downloadPath = FileUtils.getInGamePath(relPath).getParent().resolve(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), item.crc));
                 }
                 Path downloadedFile = downloadSingleFile(fileUrl,
                         downloadPath, verifier, replace);
@@ -98,8 +98,10 @@ public class FileDownloader {
                     return downloadedFile;
                 }
                 crcLog.append("网址 ").append(baseUrl).append("\n");
-                crcLog.append("预期： ").append(crcSupplier.getAsLong()).append("\n");
-                crcLog.append("收到： ").append(FileUtils.calculateCRC32(downloadedFile)).append("\n");
+                crcLog.append("预期CRC： ").append(item.crc).append("\n");
+                crcLog.append("收到CRC： ").append(FileUtils.calculateCRC32(downloadedFile)).append("\n");
+                crcLog.append("预期大小： ").append(item.size).append("\n");
+                crcLog.append("收到大小： ").append(EscalatedFS.size(downloadedFile)).append("\n");
                 // Delete invalid file
                 EscalatedFS.deleteIfExists(downloadedFile);
             }
@@ -109,7 +111,7 @@ public class FileDownloader {
         String fallbackUrl = appConfig.getFallbackUrl() + "/" + relPath;
         Path downloadPath = basePath.resolve(relPath);
         if (appConfig.shouldDownloadStraightToGame()) {
-            downloadPath = FileUtils.getInGamePath(relPath).getParent().resolve(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), crcSupplier.getAsLong()));
+            downloadPath = FileUtils.getInGamePath(relPath).getParent().resolve(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), item.crc));
         }
         Path downloadedFile = downloadSingleFile(fallbackUrl,
                 downloadPath, verifier, replace);
@@ -118,8 +120,10 @@ public class FileDownloader {
             return downloadedFile;
         }
         crcLog.append("网址 ").append(appConfig.getFallbackUrl()).append("\n");
-        crcLog.append("预期： ").append(crcSupplier.getAsLong()).append("\n");
-        crcLog.append("收到： ").append(FileUtils.calculateCRC32(downloadedFile)).append("\n");
+        crcLog.append("预期CRC： ").append(item.crc).append("\n");
+        crcLog.append("收到CRC： ").append(FileUtils.calculateCRC32(downloadedFile)).append("\n");
+        crcLog.append("预期大小： ").append(item.size).append("\n");
+        crcLog.append("收到大小： ").append(EscalatedFS.size(downloadedFile)).append("\n");
         // Delete invalid file
         EscalatedFS.deleteIfExists(downloadedFile);
 

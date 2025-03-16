@@ -50,7 +50,7 @@ public class GameFileManager {
 
     public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
         return fileDownloader.downloadFile(dataPath, catalogEntry.getKey(),
-                catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError, catalogEntry.getValue()::getCrc).thenCompose(downloadedFile -> {
+                catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError, catalogEntry.getValue()).thenCompose(downloadedFile -> {
             if (downloadedFile == null) {
                 log("下载此文件失败: " + catalogEntry.getKey());
                 return CompletableFuture.completedFuture(false);
@@ -135,7 +135,7 @@ public class GameFileManager {
     }
 
     private CompletableFuture<Boolean> downloadAndProcessCatalog(String catalogPath, Set<String> availableCustomDownloads) {
-        return fileDownloader.downloadFile(dataPath, catalogPath, path -> true, true, this::logError, () -> 0).thenCompose(path -> {
+        return fileDownloader.downloadFile(dataPath, catalogPath, path -> true, true, this::logError, CommonCatalogItem.EMPTY).thenCompose(path -> {
             try {
                 log("已下载 " + catalogPath + ", 处理中...");
                 MXCatalog catalog;
@@ -171,7 +171,7 @@ public class GameFileManager {
     }
 
     private CompletableFuture<Boolean> downloadAndCopyFile(String filePath) {
-        return fileDownloader.downloadFile(dataPath, filePath, path -> true, true, this::logError, () -> 0).thenCompose(path -> {
+        return fileDownloader.downloadFile(dataPath, filePath, path -> true, true, this::logError, CommonCatalogItem.EMPTY).thenCompose(path -> {
             try {
                 FileUtils.copyToGame(path, filePath);
                 return CompletableFuture.completedFuture(true);
