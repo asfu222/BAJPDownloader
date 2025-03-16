@@ -17,6 +17,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -81,7 +82,7 @@ public class FileDownloader {
     private Path tryDownloadFromAllSources(Path basePath, String relPath,
                                            Function<Path, Boolean> verifier, boolean replace, LongSupplier crcSupplier) throws IOException {
         List<String> serverUrls = appConfig.getServerUrls();
-
+        StringBuilder crcLog = new StringBuilder();
         // Try primary servers first
         for (String baseUrl : serverUrls) {
             String fileUrl = baseUrl + "/" + relPath;
@@ -96,9 +97,9 @@ public class FileDownloader {
                 if (verifier.apply(downloadedFile)) {
                     return downloadedFile;
                 }
-                System.out.println("From url " + baseUrl);
-                System.out.println("Expected: " + crcSupplier.getAsLong());
-                System.out.println("Practice: " + FileUtils.calculateCRC32(downloadedFile));
+                crcLog.append("网址 ").append(baseUrl).append("\n");
+                crcLog.append("预期： ").append(crcSupplier.getAsLong()).append("\n");
+                crcLog.append("收到： ").append(FileUtils.calculateCRC32(downloadedFile)).append("\n");
                 // Delete invalid file
                 EscalatedFS.deleteIfExists(downloadedFile);
             }
@@ -108,7 +109,7 @@ public class FileDownloader {
         String fallbackUrl = appConfig.getFallbackUrl() + "/" + relPath;
         Path downloadPath = basePath.resolve(relPath);
         if (appConfig.shouldDownloadStraightToGame()) {
-            downloadPath = FileUtils.getInGamePath(relPath).resolveSibling(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), crcSupplier.getAsLong()));
+            downloadPath = FileUtils.getInGamePath(relPath).getParent().resolve(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), crcSupplier.getAsLong()));
         }
         Path downloadedFile = downloadSingleFile(fallbackUrl,
                 downloadPath, verifier, replace);
@@ -116,13 +117,13 @@ public class FileDownloader {
         if (verifier.apply(downloadedFile)) {
             return downloadedFile;
         }
-        System.out.println("From fallback");
-        System.out.println("Expected: " + crcSupplier.getAsLong());
-        System.out.println("Practice: " + FileUtils.calculateCRC32(downloadedFile));
+        crcLog.append("网址 ").append(appConfig.getFallbackUrl()).append("\n");
+        crcLog.append("预期： ").append(crcSupplier.getAsLong()).append("\n");
+        crcLog.append("收到： ").append(FileUtils.calculateCRC32(downloadedFile)).append("\n");
         // Delete invalid file
         EscalatedFS.deleteIfExists(downloadedFile);
 
-        throw new IOException("Failed to download " + relPath + ": No valid CRC found");
+        throw new IOException("下载失败： " + relPath + "：未通过CRC验证。详情：\n" + crcLog);
     }
     private static final OkHttpClient client = new OkHttpClient.Builder()
             .connectTimeout(10000, java.util.concurrent.TimeUnit.MILLISECONDS) // 10 seconds
