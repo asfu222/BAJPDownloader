@@ -146,6 +146,7 @@ public class FileDownloader {
 
         Request request = new Request.Builder()
                 .url(fileUrl)
+                .addHeader("User-Agent", "BAAssetDownloaderAPP")
                 .build();
 
         try (Response response = client.newCall(request).execute()) {
@@ -186,27 +187,34 @@ public class FileDownloader {
             for (String serverUrl : appConfig.getServerUrls()) {
                 serverAvailable.put(serverUrl, new HashSet<>());
                 try {
-                    URL url = new URL(serverUrl + "/catalog.json");
-                    HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-                    connection.setConnectTimeout(CONNECTION_TIMEOUT);
-                    connection.setReadTimeout(READ_TIMEOUT);
-
-                    try (InputStream inputStream = new BufferedInputStream(connection.getInputStream());
-                         BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
-                        StringBuilder jsonText = new StringBuilder();
-                        String line;
-                        while ((line = reader.readLine()) != null) {
-                            jsonText.append(line);
+                    Request request = new Request.Builder()
+                            .url(serverUrl + "/catalog.json")
+                            .addHeader("User-Agent", "BAAssetDownloaderAPP")
+                            .build();
+                    try (Response response = client.newCall(request).execute()) {
+                        // Ensure the request was successful
+                        if (!response.isSuccessful()) {
+                            throw new IOException("Failed to download file: " + response.code());
                         }
-
-                        JSONArray jsonArray = new JSONArray(jsonText.toString());
-                        Set<String> availablePaths = new HashSet<>();
-                        for (int i = 0; i < jsonArray.length(); i++) {
-                            availablePaths.add(jsonArray.getString(i));
+                        ResponseBody body = response.body();
+                        if (body == null) {
+                            throw new IOException("No response body received");
                         }
-                        serverAvailable.put(serverUrl, availablePaths);
-                    } finally {
-                        connection.disconnect();
+                        try (InputStream inputStream = new BufferedInputStream(body.byteStream());
+                             BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream))) {
+                            StringBuilder jsonText = new StringBuilder();
+                            String line;
+                            while ((line = reader.readLine()) != null) {
+                                jsonText.append(line);
+                            }
+
+                            JSONArray jsonArray = new JSONArray(jsonText.toString());
+                            Set<String> availablePaths = new HashSet<>();
+                            for (int i = 0; i < jsonArray.length(); i++) {
+                                availablePaths.add(jsonArray.getString(i));
+                            }
+                            serverAvailable.put(serverUrl, availablePaths);
+                        }
                     }
                 } catch (IOException | JSONException e) {
                     System.err.println("Error fetching catalog from " + serverUrl + ": " + e.getMessage());
