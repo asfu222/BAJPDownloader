@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Set;
 import java.util.zip.CRC32;
+import android.os.Environment;
 
 public abstract class FileUtils {
     private static final XXHash64 xxHash64 = XXHashFactory.fastestInstance().hash64();
@@ -55,7 +56,7 @@ public abstract class FileUtils {
     private static final Set<String> STATIC_FILES = Set.of("TableCatalog.bytes", "MediaCatalog.bytes", "bundleDownloadInfo.json", "TableCatalog.hash", "MediaCatalog.hash", "bundleDownloadInfo.hash");
 
     public static Path getInGamePath(String urlPath) {
-        return Paths.get("/storage/emulated/0/Android/data/com.YostarJP.BlueArchive/files/")
+        return 	Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/")
                 .resolve(mapToInGamePath(urlPath));
     }
 

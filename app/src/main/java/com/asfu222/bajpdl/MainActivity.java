@@ -6,6 +6,7 @@ import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.IBinder;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
@@ -53,14 +54,13 @@ public class MainActivity extends AppCompatActivity {
     private final Shizuku.OnRequestPermissionResultListener shizukuPermissionListener =
             (requestCode, grantResult) -> {
                 if (requestCode == REQUEST_CODE) {
-                    updateConsole("Shizuku permission result: " + (grantResult == PackageManager.PERMISSION_GRANTED ? "GRANTED" : "DENIED"));
                     if (grantResult == PackageManager.PERMISSION_GRANTED) {
                         startDownloadButton.setEnabled(true);
                         startReplacementsButton.setEnabled(true);
-                        updateConsole("Shizuku permission granted");
+                        updateConsole("已获取Shizuku权限");
                         bindShizukuUserService();
                     } else {
-                        updateConsole("⚠️ Shizuku permission denied");
+                        updateConsole("⚠️用户拒绝给与Shizuku权限");
                         startDownloadButton.setEnabled(false);
                         startReplacementsButton.setEnabled(false);
                     }
@@ -75,7 +75,7 @@ public class MainActivity extends AppCompatActivity {
 
     private final Shizuku.OnBinderDeadListener binderDeadListener = () -> {
         shizukuBinderReceived = false;
-        updateConsole("Shizuku service disconnected");
+        updateConsole("Shizuku服务断开");
         runOnUiThread(() -> {
             startDownloadButton.setEnabled(false);
             startReplacementsButton.setEnabled(false);
@@ -302,7 +302,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         try {
-            if (!EscalatedFS.exists(Paths.get("/storage/emulated/0/Android/data/com.YostarJP.BlueArchive/files/AssetBundls"))) {
+            if (!EscalatedFS.exists(Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/"))) {
                 updateConsole("错误：请先打开蔚蓝档案并等待加载完成");
                 return;
             }

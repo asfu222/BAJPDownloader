@@ -190,7 +190,7 @@ public class GameFileManager {
 
     public void startReplacements() {
         try (var paths = EscalatedFS.walk(dataPath)) {
-            CompletableFuture.allOf(paths
+                CompletableFuture.allOf(paths
                             .filter(Files::isRegularFile)
                             .map(file -> CompletableFuture.runAsync(() -> {
                                 try {
@@ -201,7 +201,7 @@ public class GameFileManager {
                                     logError("复制到游戏时报错", e);
                                 }
                             })).toArray(CompletableFuture[]::new))
-                    .thenRun(() -> log("完成替换"));
+                    .thenRun(() -> log("完成替换（未下载任何文件）"));
         } catch (IOException e) {
             logError("Error walking directory", e);
         }

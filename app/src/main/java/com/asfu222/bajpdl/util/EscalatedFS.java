@@ -3,6 +3,7 @@ package com.asfu222.bajpdl.util;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
+import android.os.Environment;
 
 import com.asfu222.bajpdl.shizuku.IUserService;
 
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.stream.Stream;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.File;
 
 
 /**
@@ -36,7 +38,12 @@ public abstract class EscalatedFS {
     }
 
     private static boolean needsEscalation() {
-        return Build.VERSION.SDK_INT > 29;
+        return !canReadWriteAndroidData();
+    }
+
+    public static boolean canReadWriteAndroidData() {
+        File dataDir = new File(Environment.getExternalStorageDirectory() + "/Android/data");
+        return dataDir.canRead() && dataDir.canWrite();
     }
 
     public static Path createDirectories(Path path) throws IOException {
