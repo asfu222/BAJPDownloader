@@ -117,7 +117,7 @@ public class AppConfig {
 
 private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
     Executors.newSingleThreadExecutor().execute(() -> {
-        final String FALLBACK_URL = "https://raw.githubusercontent.com/asfu222/BACNLocalizationResources/refs/heads/main/ba.env";
+        final String FALLBACK_URL = "https://cdn.bluearchive.me/ba.env";
         final int MAX_RETRIES = 3;
         final int TIMEOUT = 5000; // 5 seconds
 
