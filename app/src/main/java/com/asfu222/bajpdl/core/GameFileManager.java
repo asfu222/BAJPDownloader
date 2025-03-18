@@ -58,6 +58,7 @@ public class GameFileManager {
             }
             try {
                 // log("Copying file to game: " + catalogEntry.getKey());
+                if (!appConfig.shouldDownloadStraightToGame())
                 FileUtils.copyToGame(downloadedFile, catalogEntry.getKey());
             } catch (Exception e) {
                 logError("处理文件时报错: " + catalogEntry.getKey(), e);
