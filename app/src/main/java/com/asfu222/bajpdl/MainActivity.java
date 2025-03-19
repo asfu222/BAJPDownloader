@@ -88,12 +88,20 @@ public class MainActivity extends AppCompatActivity {
         public void onServiceConnected(ComponentName component, IBinder binder) {
             userService = IUserService.Stub.asInterface(binder);
             EscalatedFS.setShizukuService(userService);
-            startDownloadButton.setEnabled(true);
-            startReplacementsButton.setEnabled(true);
+            if (userService != null) {
+                updateConsole("已挂载用户服务");
+                startDownloadButton.setEnabled(true);
+                startReplacementsButton.setEnabled(true);
+            }
+            else {
+                updateConsole("挂载用户服务失败，正在重试");
+                bindShizukuUserService();
+            }
         }
 
         @Override
         public void onServiceDisconnected(ComponentName component) {
+            updateConsole("已取消挂载用户服务");
             userService = null;
             EscalatedFS.setShizukuService(null);
             startDownloadButton.setEnabled(false);
