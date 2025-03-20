@@ -1,11 +1,11 @@
 package com.asfu222.bajpdl.util;
 
-import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.os.RemoteException;
 import android.os.Environment;
 
 import com.asfu222.bajpdl.shizuku.IUserService;
+import com.asfu222.bajpdl.shizuku.ShizukuRemoteProcess;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -20,7 +20,6 @@ import java.util.stream.Stream;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.File;
-
 
 /**
  * A wrapper to convert java.nio.file.Files operations to escalated shell operations.
@@ -291,35 +290,37 @@ public abstract class EscalatedFS {
         if (!needsEscalation()) {
             return Files.walk(start);
         }
+        Process process = execEscalated("find " + start.toString() + " -type f -o -type d");
 
-        if (rootAvailable) {
-            Process process = execEscalated("find " + start.toString() + " -type f -o -type d");
+        java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(process.getInputStream()));
 
-            java.io.BufferedReader reader = new java.io.BufferedReader(
-                    new java.io.InputStreamReader(process.getInputStream()));
-
-            return reader.lines()
-                    .filter(line -> !line.isEmpty())
-                    .map(java.nio.file.Paths::get)
-                    .onClose(() -> {
-                        try {
-                            reader.close();
-                            if (process.waitFor() != 0) {
-                                throw new java.io.UncheckedIOException(
-                                        new IOException("Failed to walk directory: " + start));
-                            }
-                        } catch (IOException | InterruptedException e) {
+        return reader.lines()
+                .filter(line -> !line.isEmpty())
+                .map(java.nio.file.Paths::get)
+                .onClose(() -> {
+                    try {
+                        reader.close();
+                        if (process.waitFor() != 0) {
                             throw new java.io.UncheckedIOException(
-                                    new IOException("Error closing resources: " + e.getMessage(), e));
+                                    new IOException("Failed to walk directory: " + start));
                         }
-                    });
-        }
-        return Files.walk(start);
+                    } catch (IOException | InterruptedException e) {
+                        throw new java.io.UncheckedIOException(
+                                new IOException("Error closing resources: " + e.getMessage(), e));
+                    }
+                });
     }
 
     private static Process execEscalated(String command) throws IOException {
         if (rootAvailable) return Runtime.getRuntime().exec(new String[]{"su", "-c", command});
-        throw new IOException("Shizuku shell execution has been removed.");
+        try {
+            var remoteProcess = shizukuService.newProcess(new String[]{"sh", "-c", command}, null, null);
+            System.out.println("Shizuku 创建进程: " + remoteProcess);
+            return new ShizukuRemoteProcess(remoteProcess);
+        } catch (RemoteException ex) {
+            throw new IOException("Shizuku 创建进程时报错", ex);
+        }
     }
 
     static class ProcessOutputStream extends OutputStream {

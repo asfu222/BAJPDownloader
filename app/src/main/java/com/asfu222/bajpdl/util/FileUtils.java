@@ -7,9 +7,9 @@ import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.zip.CRC32;
 import android.os.Environment;
 
@@ -71,14 +71,36 @@ public abstract class FileUtils {
         return name;
     }
 
-    public static void copyToGame(Path file, String urlPath) throws IOException {
+    public static Path copyToGame(Path file, String urlPath) throws IOException {
         Path newPath = getInGamePath(urlPath).getParent().resolve(renameToInGameFormat(file));
         if (file.toAbsolutePath().equals(newPath.toAbsolutePath())) {
-            return;
+            return newPath;
         }
         if (!EscalatedFS.exists(newPath.getParent())) {
             EscalatedFS.createDirectories(newPath.getParent());
         }
         EscalatedFS.copy(file, newPath, StandardCopyOption.REPLACE_EXISTING);
+        return newPath;
+    }
+
+    public static void deleteOldGameFiles(Path newestFile, BiConsumer<String, Exception> handler) {
+        String newestFileName = newestFile.getFileName().toString();
+        String namePart = newestFileName.substring(0, newestFileName.lastIndexOf('_'));
+
+        try (var paths = EscalatedFS.walk(newestFile.getParent())) {
+                paths.filter(f -> {
+                String fileName = f.getFileName().toString();
+                return fileName.startsWith(namePart) && !fileName.equals(newestFileName);
+            }).forEach(f -> {
+                try {
+                    EscalatedFS.deleteIfExists(f);
+                } catch (IOException e) {
+                    handler.accept("删除旧文件时报错", e);
+                }
+            });
+        } catch (IOException ex) {
+            System.out.println("Caught error while walking " + newestFile.getParent());
+            handler.accept("删除旧文件时报错", ex);
+        }
     }
 }

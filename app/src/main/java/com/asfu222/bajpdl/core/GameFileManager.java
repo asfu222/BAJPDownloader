@@ -57,9 +57,10 @@ public class GameFileManager {
                 return CompletableFuture.completedFuture(false);
             }
             try {
-                // log("Copying file to game: " + catalogEntry.getKey());
-                if (!appConfig.shouldDownloadStraightToGame())
-                FileUtils.copyToGame(downloadedFile, catalogEntry.getKey());
+                if (!appConfig.shouldDownloadStraightToGame()) {
+                    downloadedFile = FileUtils.copyToGame(downloadedFile, catalogEntry.getKey());
+                }
+                FileUtils.deleteOldGameFiles(downloadedFile, this::logError);
             } catch (Exception e) {
                 logError("处理文件时报错: " + catalogEntry.getKey(), e);
                 return CompletableFuture.completedFuture(false);
@@ -131,11 +132,11 @@ public class GameFileManager {
                             intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", "com.yostarjp.bluearchive.MxUnityPlayerActivity"));
                             intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                             appContext.startActivity(intent);
-                        }
-                        System.runFinalization();
+                            System.runFinalization();
 
-                        if (appContext instanceof Activity) {
-                            ((Activity)appContext).finishAffinity();
+                            if (appContext instanceof Activity) {
+                                ((Activity)appContext).finishAffinity();
+                            }
                         }
                     });
         });

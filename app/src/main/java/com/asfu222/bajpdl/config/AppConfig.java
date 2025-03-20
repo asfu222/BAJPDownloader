@@ -90,7 +90,7 @@ public class AppConfig {
     }
 
     private void loadConfig() {
-        File configFile = new File(context.getExternalFilesDir("config"), "config.json");
+        File configFile = new File(context.getExternalFilesDir("bajpdl_cfg"), "config.json");
         if (configFile.exists()) {
             try {
                 String content = new String(Files.readAllBytes(Paths.get(configFile.getPath())));

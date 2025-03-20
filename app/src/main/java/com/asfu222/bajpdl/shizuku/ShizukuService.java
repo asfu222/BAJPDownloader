@@ -1,6 +1,8 @@
 package com.asfu222.bajpdl.shizuku;
 
 import android.content.Context;
+import android.os.Binder;
+import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 
 import java.io.File;
@@ -14,6 +16,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 
 public class ShizukuService extends IUserService.Stub {
+    private final ClientManager clientManager = new ClientManager();
     public ShizukuService() {
     }
     public ShizukuService(Context context) {
@@ -91,6 +94,21 @@ public class ShizukuService extends IUserService.Stub {
             status[0] = printStackTrace(e);
         }
     }
+
+    @Override
+    public final IRemoteProcess newProcess(String[] cmd, String[] env, String dir) {
+        java.lang.Process process;
+        try {
+            process = Runtime.getRuntime().exec(cmd, env, dir != null ? new File(dir) : null);
+        } catch (IOException e) {
+            throw new IllegalStateException(e.getMessage());
+        }
+
+        ClientRecord clientRecord = clientManager.findClient(Binder.getCallingUid(), Binder.getCallingPid());
+        IBinder token = clientRecord != null ? clientRecord.client.asBinder() : null;
+        return new RemoteProcessHolder(process, token);
+    }
+
     private static String printStackTrace(Exception e) {
         StringWriter sw = new StringWriter();
         e.printStackTrace(new java.io.PrintWriter(sw));
