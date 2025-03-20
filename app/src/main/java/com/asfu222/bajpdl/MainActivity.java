@@ -31,7 +31,6 @@ import com.asfu222.bajpdl.util.EscalatedFS;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.List;
 
@@ -41,7 +40,6 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_CODE = 1;
     private EditText serverUrlsInput;
     private Button startDownloadButton;
-    private Button startReplacementsButton;
     private ProgressBar progressBar;
     private TextView progressText;
     private TextView consoleOutput;
@@ -56,13 +54,11 @@ public class MainActivity extends AppCompatActivity {
                 if (requestCode == REQUEST_CODE) {
                     if (grantResult == PackageManager.PERMISSION_GRANTED) {
                         startDownloadButton.setEnabled(true);
-                        startReplacementsButton.setEnabled(true);
                         updateConsole("已获取Shizuku权限");
                         bindShizukuUserService();
                     } else {
                         updateConsole("⚠️用户拒绝给与Shizuku权限");
                         startDownloadButton.setEnabled(false);
-                        startReplacementsButton.setEnabled(false);
                     }
                 }
             };
@@ -78,7 +74,6 @@ public class MainActivity extends AppCompatActivity {
         updateConsole("Shizuku服务断开");
         runOnUiThread(() -> {
             startDownloadButton.setEnabled(false);
-            startReplacementsButton.setEnabled(false);
         });
     };
 
@@ -91,7 +86,6 @@ public class MainActivity extends AppCompatActivity {
             if (userService != null) {
                 updateConsole("已挂载用户服务");
                 startDownloadButton.setEnabled(true);
-                startReplacementsButton.setEnabled(true);
             }
             else {
                 updateConsole("挂载用户服务失败，正在重试");
@@ -105,7 +99,6 @@ public class MainActivity extends AppCompatActivity {
             userService = null;
             EscalatedFS.setShizukuService(null);
             startDownloadButton.setEnabled(false);
-            startReplacementsButton.setEnabled(false);
         }
     };
 
@@ -130,8 +123,6 @@ public class MainActivity extends AppCompatActivity {
         Switch downloadStraightToGameSwitch = findViewById(R.id.downloadStraightToGameSwitch);
         Switch openBA = findViewById(R.id.openBASwitch);
         startDownloadButton = findViewById(R.id.startDownloadButton);
-        startReplacementsButton = findViewById(R.id.startReplacementsButton);
-        startReplacementsButton.setOnClickListener(v -> gameFileManager.startReplacements());
         progressBar = findViewById(R.id.progressBar);
         progressText = findViewById(R.id.progressText);
         consoleScrollView = findViewById(R.id.consoleScrollView);
@@ -190,13 +181,17 @@ public class MainActivity extends AppCompatActivity {
             return false;
         });
 
-        setupEscalatedPermissions();
+        if (!EscalatedFS.canReadWriteAndroidData()) {
+            setupEscalatedPermissions();
+        } else {
+            updateConsole("已获取存储权限");
+            startDownloadButton.setEnabled(true);
+        }
     }
 
     private void setupEscalatedPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             startDownloadButton.setEnabled(false);
-            startReplacementsButton.setEnabled(false);
             updateConsole("检测Shizuku服务是否运行...");
 
             Shizuku.addBinderReceivedListener(binderReceivedListener);
@@ -213,7 +208,6 @@ public class MainActivity extends AppCompatActivity {
                     updateConsole("检测到Root权限");
                     EscalatedFS.setRootAvailable(true);
                     startDownloadButton.setEnabled(true);
-                    startReplacementsButton.setEnabled(true);
                 }
             }
         } else {
@@ -227,7 +221,7 @@ public class MainActivity extends AppCompatActivity {
         super.onResume();
 
         // Re-check Shizuku status when activity resumes
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isRootAvailable() && !shizukuBinderReceived) {
+        if (!EscalatedFS.canReadWriteAndroidData() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isRootAvailable() && !shizukuBinderReceived) {
             updateConsole("活动恢复，正在检查Shizuku服务状态...");
             if (Shizuku.pingBinder()) {
                 updateConsole("Shizuku服务已运行");
@@ -259,7 +253,6 @@ public class MainActivity extends AppCompatActivity {
 
             if (permissionResult == PackageManager.PERMISSION_GRANTED) {
                 startDownloadButton.setEnabled(true);
-                startReplacementsButton.setEnabled(true);
                 bindShizukuUserService();
             } else {
                 if (!permissionRequested) {
@@ -279,7 +272,6 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             logErrorToConsole("检测Shizuku权限时报错", e);
             startDownloadButton.setEnabled(false);
-            startReplacementsButton.setEnabled(false);
         }
     }
 
@@ -304,19 +296,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startDownloads() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !shizukuBinderReceived &&
-                Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED && !isRootAvailable()) {
-            updateConsole("错误：请先给与本软件Root或Shizuku权限。");
-            return;
-        }
-        try {
-            if (!EscalatedFS.exists(Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/"))) {
-                updateConsole("错误：请先打开蔚蓝档案并等待加载完成");
+        if (!EscalatedFS.canReadWriteAndroidData()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !shizukuBinderReceived &&
+                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED && !isRootAvailable()) {
+                updateConsole("错误：请先给与本软件Root或Shizuku权限。");
                 return;
             }
-        } catch (IOException e) {
-            logErrorToConsole("检测蔚蓝档案安装状态时报错", e);
-            return;
+            try {
+                if (!EscalatedFS.exists(Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/"))) {
+                    updateConsole("错误：请先打开蔚蓝档案并等待加载完成");
+                    return;
+                }
+            } catch (IOException e) {
+                logErrorToConsole("检测蔚蓝档案安装状态时报错", e);
+                return;
+            }
         }
         progressBar.setVisibility(View.VISIBLE);
         progressText.setVisibility(View.VISIBLE);
@@ -351,7 +345,6 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 updateConsole("未获取存储权限");
                 startDownloadButton.setEnabled(false);
-                startReplacementsButton.setEnabled(false);
             }
         }
     }

@@ -42,7 +42,7 @@ public abstract class EscalatedFS {
     }
 
     public static boolean canReadWriteAndroidData() {
-        File dataDir = new File(Environment.getExternalStorageDirectory() + "/Android/data");
+        File dataDir = new File(Environment.getExternalStorageDirectory() + "/Android/data/com.YostarJP.BlueArchive/files/");
         return dataDir.canRead() && dataDir.canWrite();
     }
 

@@ -186,7 +186,7 @@ private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
 }
 
     public void saveConfig() {
-        File configFile = new File(context.getExternalFilesDir("config"), "config.json");
+        File configFile = new File(context.getExternalFilesDir("bajpdl_cfg"), "config.json");
         try (FileWriter writer = new FileWriter(configFile)) {
             JSONObject json = new JSONObject();
             json.put("replaceDownloadedFiles", alwaysRedownload);
