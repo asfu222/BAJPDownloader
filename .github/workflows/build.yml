@@ -35,16 +35,14 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Set up Keystore Environment Variables
+      - name: Build Signed Release APKs
+        env:
+          KEYSTORE_PASSWORD= ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS= ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD= ${{ secrets.KEY_PASSWORD }}
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > app/keystore.jks
-          echo "KEYSTORE_PASSWORD=${{ secrets.SIGNING_STORE_PASSWORD }}" >> $GITHUB_ENV
-          echo "KEY_ALIAS=${{ secrets.SIGNING_KEY_ALIAS }}" >> $GITHUB_ENV
-          echo "KEY_PASSWORD=${{ secrets.SIGNING_KEY_PASSWORD }}" >> $GITHUB_ENV
-
-      - name: Build Signed Release APKs
-        run: ./gradlew assembleMainBuildRelease assembleMitmBuildRelease
-
+          ./gradlew assembleMainBuildRelease assembleMitmBuildRelease
       - name: Get Short Commit Hash
         run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 

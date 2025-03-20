@@ -36,6 +36,8 @@ android {
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
             }
+        } else {
+            println("No keystore password found, skipping signing config")
         }
     }
 
