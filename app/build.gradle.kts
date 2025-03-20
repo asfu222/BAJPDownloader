@@ -2,6 +2,7 @@ import java.net.URI
 import java.util.Properties
 import java.io.StringReader
 import java.util.Base64
+import java.io.FileOutputStream
 
 plugins {
     alias(libs.plugins.android.application)
@@ -28,13 +29,9 @@ android {
     }
 
     signingConfigs {
-        if (System.getenv("KEYSTORE_FILE")?.isNotBlank() == true) {
+        if (System.getenv("KEYSTORE_PASSWORD")?.isNotBlank() == true) {
             create("release") {
-                val keystoreFileContent = System.getenv("KEYSTORE_FILE")
-                val keystoreFile = File(layout.buildDirectory.asFile.get(), "keystore.jks")
-                keystoreFile.writeBytes(Base64.getDecoder().decode(keystoreFileContent))
-
-                storeFile = keystoreFile
+                storeFile = file("keystore.jks")
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")

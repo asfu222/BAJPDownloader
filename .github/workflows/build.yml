@@ -37,7 +37,7 @@ jobs:
 
       - name: Set up Keystore Environment Variables
         run: |
-          echo "KEYSTORE_FILE=${{ secrets.SIGNING_KEYSTORE_BASE64 }}" >> $GITHUB_ENV
+          echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > app/keystore.jks
           echo "KEYSTORE_PASSWORD=${{ secrets.SIGNING_STORE_PASSWORD }}" >> $GITHUB_ENV
           echo "KEY_ALIAS=${{ secrets.SIGNING_KEY_ALIAS }}" >> $GITHUB_ENV
           echo "KEY_PASSWORD=${{ secrets.SIGNING_KEY_PASSWORD }}" >> $GITHUB_ENV
