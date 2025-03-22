@@ -40,7 +40,7 @@ jobs:
 
       - name: Build Signed Release APKs
         run: |
-          echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > app/keystore.jks
+          echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > keystore.jks
           ./gradlew assembleRelease
       - name: Get Short Commit Hash
         run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV

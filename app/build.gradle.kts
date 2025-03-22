@@ -16,7 +16,7 @@ android {
             System.getenv("KEY_ALIAS")?.isNotBlank() == true &&
             System.getenv("KEY_PASSWORD")?.isNotBlank() == true) {
             signingConfigs.create("release") {
-                storeFile = file("keystore.jks")
+                storeFile = rootProject.file("keystore.jks")
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
