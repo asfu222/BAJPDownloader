@@ -41,7 +41,7 @@ jobs:
       - name: Build Signed Release APKs
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > app/keystore.jks
-          ./gradlew assembleMainBuildRelease assembleMitmBuildRelease
+          ./gradlew assembleRelease
       - name: Get Short Commit Hash
         run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
@@ -53,10 +53,10 @@ jobs:
           name: BAJPDownloader-main-release-${{ env.COMMIT_HASH }}
           path: app/build/outputs/apk/mainBuild/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
 
-      - name: Rename and Upload Mitm Build Release APK
-        run: mv app/build/outputs/apk/mitmBuild/release/app-mitmBuild-release.apk app/build/outputs/apk/mitmBuild/release/BAJPDownloader-mitm-${{ env.COMMIT_HASH }}.apk
+      - name: Rename and Upload MITM Server APK
+        run: mv app/build/outputs/apk/mitmBuild/release/app-mitmBuild-release.apk app/build/outputs/apk/mitmBuild/release/mitmserver.apk
       - name: Upload Mitm Build Release APK
         uses: actions/upload-artifact@v4
         with:
-          name: BAJPDownloader-mitm-release-${{ env.COMMIT_HASH }}
-          path: app/build/outputs/apk/mitmBuild/release/BAJPDownloader-mitm-${{ env.COMMIT_HASH }}.apk
+          name: mitmserver
+          path: app/build/outputs/apk/mitmBuild/release/mitmserver.apk
