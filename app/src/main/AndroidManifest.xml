@@ -9,6 +9,8 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="29" />
 
+    <uses-permission android:name="com.asfu222.bajpdl.mitm" />
+
     <!-- Queries should be here, between uses-permission and application -->
     <queries>
         <package android:name="moe.shizuku.privileged.api" />

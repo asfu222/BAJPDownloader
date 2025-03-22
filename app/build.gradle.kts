@@ -1,17 +1,5 @@
-import java.net.URI
-import java.util.Properties
-import java.io.StringReader
-import java.util.Base64
-import java.io.FileOutputStream
-
 plugins {
     alias(libs.plugins.android.application)
-}
-
-val envUrl = "https://raw.githubusercontent.com/asfu222/BACNLocalizationResources/refs/heads/main/ba.env"
-val envText = URI.create(envUrl).toURL().readText(Charsets.UTF_8)
-val envProps = Properties().apply {
-    load(StringReader(envText))
 }
 
 android {
@@ -24,20 +12,18 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
-
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    signingConfigs {
-        if (System.getenv("KEYSTORE_PASSWORD")?.isNotBlank() == true) {
-            create("release") {
+        signingConfig = if (System.getenv("KEYSTORE_PASSWORD")?.isNotBlank() == true &&
+            System.getenv("KEY_ALIAS")?.isNotBlank() == true &&
+            System.getenv("KEY_PASSWORD")?.isNotBlank() == true) {
+            signingConfigs.create("release") {
                 storeFile = file("keystore.jks")
                 storePassword = System.getenv("KEYSTORE_PASSWORD")
                 keyAlias = System.getenv("KEY_ALIAS")
                 keyPassword = System.getenv("KEY_PASSWORD")
             }
         } else {
-            println("No keystore password found, skipping signing config")
+            println("No keystore found, signing disabled. This build will not work with mitm.")
+            null
         }
     }
 
@@ -48,7 +34,6 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.findByName("release")
         }
     }
 
@@ -59,25 +44,6 @@ android {
 
     buildFeatures {
         aidl = true
-    }
-
-    flavorDimensions("version")
-
-    productFlavors {
-        create("mainBuild") {
-            dimension = "version"
-            applicationId = "com.asfu222.bajpdl"
-            // Apply signing config for this flavor
-            signingConfig = signingConfigs.findByName("release")
-        }
-
-        create("mitmBuild") {
-            dimension = "version"
-            applicationId = "com.YostarJP.BlueArchive"
-            versionCode = envProps.getProperty("BA_VERSION_CODE").toInt()
-            versionName = envProps.getProperty("BA_VERSION_NAME")
-            signingConfig = signingConfigs.findByName("release")
-        }
     }
 }
 

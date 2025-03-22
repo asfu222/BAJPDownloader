@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.YostarJP.BlueArchive">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <permission
         android:name="com.asfu222.bajpdl.mitm"
@@ -12,7 +11,7 @@
 
         <provider
             android:name=".FileSystemProvider"
-            android:authorities="com.YostarJP.BlueArchive"
+            android:authorities="com.asfu222.bajpdl.mitm.fs"
             android:grantUriPermissions="true"
             android:exported="true"
             android:permission="com.asfu222.bajpdl.mitm" />

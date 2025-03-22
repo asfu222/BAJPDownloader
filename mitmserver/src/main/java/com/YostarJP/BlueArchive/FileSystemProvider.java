@@ -2,7 +2,6 @@ package com.YostarJP.BlueArchive;
 
 import android.content.ContentProvider;
 import android.content.ContentValues;
-import android.content.UriMatcher;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
@@ -14,22 +13,17 @@ import androidx.annotation.NonNull;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.Objects;
+import java.nio.file.Paths;
 
 public class FileSystemProvider extends ContentProvider {
     private static final String TAG = "FileSystemProvider";
     private static final String AUTHORITY = "com.asfu222.bajpdl.mitm.fs";
-    private static final int FILE_CODE = 1;
-    private static final UriMatcher uriMatcher = new UriMatcher(UriMatcher.NO_MATCH);
     private boolean initialized = false;
-
-    static {
-        uriMatcher.addURI(AUTHORITY, "file/*", FILE_CODE);
-    }
 
     @Override
     public synchronized boolean onCreate() {
         initialized = true;
+        getContext().getExternalFilesDir(null).mkdirs();
         notifyAll();
         return true;
     }
@@ -44,37 +38,30 @@ public class FileSystemProvider extends ContentProvider {
         }
     }
 
-    private File getFileForUri(Uri uri) {
+    private File getFileForUri(@NonNull Uri uri) {
         waitForInitialization();
-
-        String filePath = uri.getPath();
-        if (filePath == null) {
-            throw new IllegalArgumentException("Invalid file path");
-        }
-
-        File rootDir = Objects.requireNonNull(getContext()).getExternalFilesDir("");
-        assert rootDir != null;
-        File targetFile = new File(rootDir, filePath.replaceFirst("/file/", ""));
-
-        try {
-            if (!targetFile.getCanonicalPath().startsWith(rootDir.getCanonicalPath())) {
-                throw new SecurityException("Access denied: " + targetFile.getAbsolutePath());
-            }
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to resolve file path", e);
-        }
-
-        return targetFile;
+        return getContext().getExternalFilesDir(null).toPath().resolveSibling(Paths.get(uri.getPath())).toFile();
     }
 
     @Override
     public ParcelFileDescriptor openFile(@NonNull Uri uri, @NonNull String mode) throws FileNotFoundException {
         waitForInitialization();
 
-        if (uriMatcher.match(uri) == FILE_CODE) {
+        if (AUTHORITY.equals(uri.getAuthority())) {
             File file = getFileForUri(uri);
-            int fileMode = mode.equals("r") ? ParcelFileDescriptor.MODE_READ_ONLY : ParcelFileDescriptor.MODE_READ_WRITE;
-            return ParcelFileDescriptor.open(file, fileMode);
+            int fileMode;
+            if (mode.equals("r")) {
+                fileMode = ParcelFileDescriptor.MODE_READ_ONLY;
+            } else {
+                fileMode = ParcelFileDescriptor.MODE_READ_WRITE | ParcelFileDescriptor.MODE_TRUNCATE | ParcelFileDescriptor.MODE_CREATE;
+            }
+
+            try {
+                return ParcelFileDescriptor.open(file, fileMode);
+            } catch (FileNotFoundException e) {
+                Log.e(TAG, "Error opening file", e);
+                throw e;
+            }
         }
         throw new FileNotFoundException("File not found: " + uri);
     }
@@ -83,9 +70,10 @@ public class FileSystemProvider extends ContentProvider {
     public Cursor query(@NonNull Uri uri, String[] projection, String selection, String[] selectionArgs, String sortOrder) {
         waitForInitialization();
 
-        if (uriMatcher.match(uri) == FILE_CODE) {
+        if (AUTHORITY.equals(uri.getAuthority())) {
             File file = getFileForUri(uri);
             MatrixCursor cursor = new MatrixCursor(new String[]{"exists", "size"});
+            Log.d(TAG, "Querying file: " + file + ", length = " + file.length());
             cursor.addRow(new Object[]{file.exists() ? 1 : 0, file.exists() ? file.length() : 0});
             return cursor;
         }
@@ -96,14 +84,22 @@ public class FileSystemProvider extends ContentProvider {
     public Uri insert(@NonNull Uri uri, ContentValues values) {
         waitForInitialization();
 
-        if (uriMatcher.match(uri) == FILE_CODE) {
+        if (AUTHORITY.equals(uri.getAuthority())) {
             File file = getFileForUri(uri);
+            if (file.isDirectory() && file.exists()) {
+                return uri;
+            }
             try {
                 if (file.mkdirs()) {
-                    return Uri.withAppendedPath(uri, file.getAbsolutePath());
+                    return uri;
+                } else {
+                    Log.e(TAG, "Failed to create directories");
+                    Log.d(TAG, "Parent directory: " + file.getParentFile());
+                    return null;
                 }
             } catch (Exception e) {
                 Log.e(TAG, "Failed to create directories", e);
+                return null;
             }
         }
         return null;
@@ -113,7 +109,7 @@ public class FileSystemProvider extends ContentProvider {
     public int delete(@NonNull Uri uri, String selection, String[] selectionArgs) {
         waitForInitialization();
 
-        if (uriMatcher.match(uri) == FILE_CODE) {
+        if (AUTHORITY.equals(uri.getAuthority())) {
             File file = getFileForUri(uri);
             if (file.exists() && file.delete()) {
                 return 1;

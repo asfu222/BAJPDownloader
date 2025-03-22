@@ -4,6 +4,8 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.ServiceConnection;
 import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -26,6 +28,7 @@ import androidx.core.widget.NestedScrollView;
 import com.asfu222.bajpdl.core.GameFileManager;
 import com.asfu222.bajpdl.shizuku.IUserService;
 import com.asfu222.bajpdl.shizuku.ShizukuService;
+import com.asfu222.bajpdl.util.ContentProviderFS;
 import com.asfu222.bajpdl.util.EscalatedFS;
 
 import java.io.IOException;
@@ -190,6 +193,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupEscalatedPermissions() {
+        if (isMITMAvailable()) {
+            try (var res = getContentResolver().query(Uri.parse("content://com.asfu222.bajpdl.mitm.fs"), null, null, null, null)) {
+                updateConsole("检测到MITM权限");
+                EscalatedFS.setContentProvider(new ContentProviderFS(getContentResolver()));
+                startDownloadButton.setEnabled(true);
+                return;
+            }
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             startDownloadButton.setEnabled(false);
             updateConsole("检测Shizuku服务是否运行...");
@@ -215,13 +226,24 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private boolean isMITMAvailable() {
+        ProviderInfo providerInfo = null;
+        try {
+            providerInfo = getPackageManager().resolveContentProvider(ContentProviderFS.AUTHORITY, 0);
+        } catch (Exception e) {
+            logErrorToConsole("检测内容提供者时报错", e);
+        }
+        return providerInfo != null;
+    }
+
+
     // Add this to handle activity resume cases
     @Override
     protected void onResume() {
         super.onResume();
 
         // Re-check Shizuku status when activity resumes
-        if (!EscalatedFS.canReadWriteAndroidData() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isRootAvailable() && !shizukuBinderReceived) {
+        if (!EscalatedFS.canReadWriteAndroidData() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isRootAvailable() && !shizukuBinderReceived && !isMITMAvailable()) {
             updateConsole("活动恢复，正在检查Shizuku服务状态...");
             if (Shizuku.pingBinder()) {
                 updateConsole("Shizuku服务已运行");
@@ -298,14 +320,17 @@ public class MainActivity extends AppCompatActivity {
     private void startDownloads() {
         if (!EscalatedFS.canReadWriteAndroidData()) {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !shizukuBinderReceived &&
-                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED && !isRootAvailable()) {
-                updateConsole("错误：请先给与本软件Root或Shizuku权限。");
+                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED && !isRootAvailable() && !isMITMAvailable()) {
+                updateConsole("错误：请先给与本软件Root或Shizuku或MITM权限。");
                 return;
             }
             try {
                 if (!EscalatedFS.exists(Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/"))) {
-                    updateConsole("错误：请先打开蔚蓝档案并等待加载完成");
-                    return;
+                    if (!isMITMAvailable()) {
+                        updateConsole("错误：请先打开蔚蓝档案并等待加载完成");
+                        return;
+                    }
+                    EscalatedFS.createDirectories(Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/"));
                 }
             } catch (IOException e) {
                 logErrorToConsole("检测蔚蓝档案安装状态时报错", e);

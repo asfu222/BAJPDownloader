@@ -28,12 +28,18 @@ public abstract class EscalatedFS {
     private static boolean rootAvailable;
     private static IUserService shizukuService;
 
+    private static ContentProviderFS contentProviderFS;
+
     public static void setRootAvailable(boolean value) {
         rootAvailable = value;
     }
 
     public static void setShizukuService(IUserService service) {
         shizukuService = service;
+    }
+
+    public static void setContentProvider(ContentProviderFS provider) {
+        contentProviderFS = provider;
     }
 
     private static boolean needsEscalation() {
@@ -62,6 +68,10 @@ public abstract class EscalatedFS {
             } catch (InterruptedException e) {
                 throw new IOException("创建文件夹时报错：" + e.getMessage(), e);
             }
+        } else if (contentProviderFS != null) {
+            contentProviderFS.createDirectories(path);
+        } else {
+            throw new IOException("无可用的 root 或 Shizuku 权限");
         }
         return path;
     }
@@ -84,6 +94,8 @@ public abstract class EscalatedFS {
             }
         } else if (rootAvailable) {
             return new ProcessOutputStream(execEscalated("cat > " + path.toString()));
+        } else if (contentProviderFS != null) {
+            return contentProviderFS.newOutputStream(path);
         }
         throw new IOException("无可用的 root 或 Shizuku 权限");
     }
@@ -106,6 +118,8 @@ public abstract class EscalatedFS {
             }
         } else if (rootAvailable) {
             return new ProcessInputStream(execEscalated("cat " + path.toString()));
+        } else if (contentProviderFS != null) {
+            return contentProviderFS.newInputStream(path);
         }
         throw new IOException("无可用的 root 或 Shizuku 权限");
     }
@@ -147,6 +161,10 @@ public abstract class EscalatedFS {
             } catch (InterruptedException e) {
                 throw new IOException("文件删除错误: " + e.getMessage(), e);
             }
+        } else if (contentProviderFS != null) {
+            contentProviderFS.deleteIfExists(path);
+        } else {
+            throw new IOException("无可用的 root 或 Shizuku 权限");
         }
     }
 
@@ -167,6 +185,8 @@ public abstract class EscalatedFS {
             } catch (InterruptedException e) {
                 throw new IOException("文件检测错误: " + e.getMessage(), e);
             }
+        } else if (contentProviderFS != null) {
+            return contentProviderFS.exists(path);
         }
         throw new IOException("无可用的 root 或 Shizuku 权限");
     }
@@ -238,7 +258,18 @@ public abstract class EscalatedFS {
             } catch (InterruptedException e) {
                 throw new IOException("文件操作被打断: " + e.getMessage(), e);
             }
-        } else {
+        } else if (contentProviderFS != null) {
+            try (InputStream inputStream = newInputStream(source);
+                 OutputStream outputStream = newOutputStream(target)) {
+                byte[] buffer = new byte[8192];
+                int bytesRead;
+
+                while ((bytesRead = inputStream.read(buffer)) != -1) {
+                    outputStream.write(buffer, 0, bytesRead);
+                }
+            }
+        }
+        else {
             throw new IOException("无可用的 root 或 Shizuku 权限");
         }
     }
@@ -282,6 +313,8 @@ public abstract class EscalatedFS {
                     process.destroy();
                 }
             }
+        } else if (contentProviderFS != null) {
+            return contentProviderFS.size(path);
         }
         throw new IOException("无可用的 root 或 Shizuku 权限");
     }
@@ -289,6 +322,9 @@ public abstract class EscalatedFS {
     public static Stream<Path> walk(Path start) throws IOException {
         if (!needsEscalation()) {
             return Files.walk(start);
+        }
+        if (contentProviderFS != null) {
+            return contentProviderFS.walk(start);
         }
         Process process = execEscalated("find " + start.toString() + " -type f -o -type d");
 
