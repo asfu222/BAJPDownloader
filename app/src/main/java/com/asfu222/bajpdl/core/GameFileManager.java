@@ -104,14 +104,20 @@ public class GameFileManager {
     }
 
 
+    private static boolean isDownloading = false;
 
     public void startDownloads() {
+        if (isDownloading) {
+            log("已经在下载中");
+            return;
+        }
         log("开始下载更新...");
         downloadedFiles.set(0);
         downloadedSize.set(0);
         totalFiles.set(0);
         totalSize.set(0);
         fileDownloader.updateThreadPool();
+        isDownloading = true;
         fileDownloader.fetchServerAvailable().thenRun(() -> {
             Set<String> availableCustomDownloads = fileDownloader.getAvailableCustomDownloads();
 
@@ -138,6 +144,7 @@ public class GameFileManager {
                                 ((Activity)appContext).finishAffinity();
                             }
                         }
+                        isDownloading = false;
                     });
         });
     }
