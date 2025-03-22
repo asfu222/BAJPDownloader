@@ -111,7 +111,7 @@ public class AppConfig {
         } else {
             serverUrls = new ArrayList<>();
             serverUrls.add("https://cdn.bluearchive.me/beicheng/latest");
-            serverUrls.add("https://cdn.bluearchive.me/new/latest");
+            serverUrls.add("https://cdn.bluearchive.me/commonpng/latest");
         }
     }
 
