@@ -55,8 +55,19 @@ jobs:
 
       - name: Rename and Upload MITM Server APK
         run: mv mitmserver/build/outputs/apk/release/mitmserver-release.apk mitmserver/build/outputs/apk/release/mitmserver.apk
-      - name: Upload Mitm Build Release APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: mitmserver
-          path: mitmserver/build/outputs/apk/release/mitmserver.apk
+      - name: Deploy APK to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT }}
+          AWS_MAX_ATTEMPTS: 5
+        run: |
+         aws s3 cp mitmserver.apk s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk --checksum-algorithm CRC32
+
+      - name: Purge Cloudflare Cache for APK
+        run: |
+           curl -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE_ID }}/purge_cache" \
+              -H "Authorization: Bearer ${{ secrets.CF_PURGE_TOKEN }}" \
+              -H "Content-Type: application/json" \
+              --data '{"files": ["https://cdn.bluearchive.com/apk/mitmserver.apk"]}'
