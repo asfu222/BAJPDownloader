@@ -64,10 +64,11 @@ jobs:
           AWS_MAX_ATTEMPTS: 5
         run: |
          aws s3 cp mitmserver/build/outputs/apk/release/mitmserver.apk s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk --checksum-algorithm CRC32
-
+         date > mitmserver.apk.date
+         aws s3 cp mitmserver.apk.date s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk.date --checksum-algorithm CRC32
       - name: Purge Cloudflare Cache for APK
         run: |
            curl -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE_ID }}/purge_cache" \
               -H "Authorization: Bearer ${{ secrets.CF_PURGE_TOKEN }}" \
               -H "Content-Type: application/json" \
-              --data '{"files": ["https://cdn.bluearchive.com/apk/mitmserver.apk"]}'
+              --data '{"files": ["https://cdn.bluearchive.com/apk/mitmserver.apk", "https://cdn.bluearchive.com/apk/mitmserver.apk.date"]}'
