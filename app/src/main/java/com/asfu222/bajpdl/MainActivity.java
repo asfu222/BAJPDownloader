@@ -724,4 +724,17 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+    public void updateProgress(int downloadedFiles, int totalFiles, long downloadedBytes) {
+        runOnUiThread(() -> {
+            progressBar.setVisibility(View.VISIBLE);
+            progressText.setVisibility(View.VISIBLE);
+            int progress = totalFiles > 0 ? ((downloadedFiles * 100) / totalFiles) : 1;
+            progressBar.setProgress(progress);
+            progressText.setText("进度: " + progress + "%" + " (" + downloadedFiles + "/" + totalFiles + " 文件, 已下载" + downloadedBytes + " MB)");
+            if (downloadedFiles == totalFiles) {
+                progressBar.setVisibility(View.GONE);
+                progressText.setVisibility(View.GONE);
+            }
+        });
+    }
 }

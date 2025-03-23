@@ -132,14 +132,14 @@ public class FileDownloader {
             .readTimeout(20000, java.util.concurrent.TimeUnit.MILLISECONDS)    // 20 seconds
             .build();
 
-    public CompletableFuture<Path> downloadAsync(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler) {
+    public CompletableFuture<Path> downloadAsync(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler, AtomicLong downloadedSize) {
         return CompletableFuture.supplyAsync(() -> {
             int attempts = 5;
             int delay = 5000; // 5 seconds
             for (int i = 0; i < attempts; i++) {
                 Path result = null;
                 try {
-                    result = downloadSingleFile(fileUrl, dest, verifier, replace, new AtomicLong());
+                    result = downloadSingleFile(fileUrl, dest, verifier, replace, downloadedSize);
                 } catch (IOException e) {
                     handler.accept("从" + fileUrl + "下载时报错：" , e);
                 }

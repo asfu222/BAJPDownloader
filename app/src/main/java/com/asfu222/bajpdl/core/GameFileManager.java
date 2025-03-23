@@ -56,6 +56,15 @@ public class GameFileManager {
     }
 
     public CompletableFuture<Void> downloadServerAPKs() {
+        final AtomicInteger dlFiles = new AtomicInteger(0);
+        final AtomicLong dlSize = new AtomicLong();
+        final Runnable progressRunnable = new Runnable() {
+            @Override
+            public void run() {
+                ((MainActivity) appContext).updateProgress(dlFiles.get(), 2, (long)(dlSize.get() / BYTES_TO_MB));
+                handler.postDelayed(this, 500);
+            }
+        };
         return CompletableFuture.supplyAsync(() -> {
             try {
                 Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
@@ -79,11 +88,11 @@ public class GameFileManager {
 
             CompletableFuture<Path> hashDownload1 = fileDownloader.downloadAsync(
                     "https://cdn.bluearchive.me/apk/蔚蓝档案.apk.hash",
-                    hash1Path, path -> true, true, this::logError);
+                    hash1Path, path -> true, true, this::logError, new AtomicLong());
 
             CompletableFuture<Path> hashDownload2 = fileDownloader.downloadAsync(
                     "https://cdn.bluearchive.me/apk/mitmserver.apk.hash",
-                    hash2Path, path -> true, true, this::logError);
+                    hash2Path, path -> true, true, this::logError, new AtomicLong());
 
             return CompletableFuture.allOf(hashDownload1, hashDownload2)
                     .thenApply(ignored -> {
@@ -102,15 +111,16 @@ public class GameFileManager {
                     });
         }).thenCompose(unchangedArray -> {
             Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
-
+            handler.post(progressRunnable);
             CompletableFuture<Path> apk1Future;
             if (unchangedArray[0]) {
                 apk1Future = CompletableFuture.completedFuture(null);
             } else {
                 apk1Future = fileDownloader.downloadAsync(
                         "https://cdn.bluearchive.me/apk/蔚蓝档案.apk",
-                        cachePath.resolve("蔚蓝档案.apk"), path -> true, true, this::logError);
+                        cachePath.resolve("蔚蓝档案.apk"), path -> true, true, this::logError, dlSize);
             }
+            apk1Future.thenRun(dlFiles::incrementAndGet);
 
             CompletableFuture<Path> apk2Future;
             if (unchangedArray[1]) {
@@ -118,10 +128,13 @@ public class GameFileManager {
             } else {
                 apk2Future = fileDownloader.downloadAsync(
                         "https://cdn.bluearchive.me/apk/mitmserver.apk",
-                        cachePath.resolve("mitmserver.apk"), path -> true, true, this::logError);
+                        cachePath.resolve("mitmserver.apk"), path -> true, true, this::logError, dlSize);
             }
-
-            return CompletableFuture.allOf(apk1Future, apk2Future);
+            apk2Future.thenRun(dlFiles::incrementAndGet);
+            return CompletableFuture.allOf(apk1Future, apk2Future).thenRun(() -> {
+                ((MainActivity) appContext).updateProgress(dlFiles.get(), 2, (long)(dlSize.get() / BYTES_TO_MB));
+                handler.removeCallbacks(progressRunnable);
+            });
         });
     }
 
@@ -226,6 +239,7 @@ public class GameFileManager {
                             ((MainActivity) appContext).openBlueArchive();
                         }
                         isDownloading = false;
+                        updateProgress();
                         handler.removeCallbacks(progressRunnable);
                     });
         });
