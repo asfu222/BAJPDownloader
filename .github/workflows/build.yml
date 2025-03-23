@@ -54,7 +54,7 @@ jobs:
           path: app/build/outputs/apk/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
 
       - name: Rename and Upload MITM Server APK
-        run: mv mitmserver/build/outputs/apk/release/mitmserver-release.apk mitmserver/build/outputs/apk/release/mitmserver.apk
+        run: mv mitmserver/build/outputs/apk/release/mitmserver-release.apk mitmserver.apk
       - name: Deploy APK to Cloudflare R2
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -63,8 +63,8 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT }}
           AWS_MAX_ATTEMPTS: 5
         run: |
-         aws s3 cp mitmserver/build/outputs/apk/release/mitmserver.apk s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk --checksum-algorithm CRC32
-         sha256sum > mitmserver.apk.hash
+         aws s3 cp mitmserver.apk s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk --checksum-algorithm CRC32
+         sha256sum mitmserver.apk > mitmserver.apk.hash
          aws s3 cp mitmserver.apk.hash s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk.hash --checksum-algorithm CRC32
       - name: Purge Cloudflare Cache for APK
         run: |
