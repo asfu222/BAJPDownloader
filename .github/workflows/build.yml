@@ -66,9 +66,9 @@ jobs:
          aws s3 cp mitmserver.apk s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk --checksum-algorithm CRC32
          sha256sum mitmserver.apk | awk '{print $1}' > mitmserver.apk.hash
          aws s3 cp mitmserver.apk.hash s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk.hash --checksum-algorithm CRC32
-      - name: Purge Cloudflare Cache for APK
+      - name: Purge Cloudflare Cache
         run: |
-           curl -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE_ID }}/purge_cache" \
-              -H "Authorization: Bearer ${{ secrets.CF_PURGE_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              --data '{"files": ["https://cdn.bluearchive.com/apk/mitmserver.apk", "https://cdn.bluearchive.com/apk/mitmserver.apk.hash"]}'
+          curl -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE_ID }}/purge_cache" \
+             -H "Authorization: Bearer ${{ secrets.CF_PURGE_TOKEN }}" \
+             -H "Content-Type: application/json" \
+             --data '{"purge_everything":true}'
