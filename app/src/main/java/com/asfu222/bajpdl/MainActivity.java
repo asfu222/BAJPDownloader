@@ -37,6 +37,7 @@ import androidx.core.widget.NestedScrollView;
 import com.asfu222.bajpdl.core.GameFileManager;
 import com.asfu222.bajpdl.shizuku.IUserService;
 import com.asfu222.bajpdl.shizuku.ShizukuService;
+import com.asfu222.bajpdl.util.ApkParser;
 import com.asfu222.bajpdl.util.ContentProviderFS;
 import com.asfu222.bajpdl.util.EscalatedFS;
 
@@ -135,6 +136,8 @@ public class MainActivity extends AppCompatActivity {
 
     private final AtomicReference<String> mInstallPackage = new AtomicReference<>("");
     private final Stack<Consumer<Boolean>> installCallbackStack = new Stack<>();
+    private final AtomicReference<String> mUninstallPackage = new AtomicReference<>("");
+    private final Stack<Consumer<Boolean>> uninstallCallbackStack = new Stack<>();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -283,88 +286,98 @@ public class MainActivity extends AppCompatActivity {
         }
 
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
-        if (true) {
-            launchInstallIntent(uri, "com.YostarJP.BlueArchive", callback);
-            return;
-        }
-        PackageManager pm = getPackageManager();
-        /*
-        int flag = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ?
-                PackageManager.GET_SIGNING_CERTIFICATES :
-                PackageManager.GET_SIGNATURES;
-         */
-        int flag = PackageManager.GET_META_DATA;
-        // APK parsing
-        PackageInfo apkPackageInfo = pm.getPackageArchiveInfo(file.getAbsolutePath(), flag);
-        if (apkPackageInfo == null) {
-            updateConsole("Failed to parse APK file: " + file.getAbsolutePath());
-            return;
-        }
 
-        // Set application info paths
-        apkPackageInfo.applicationInfo.sourceDir = file.getAbsolutePath();
-        apkPackageInfo.applicationInfo.publicSourceDir = file.getAbsolutePath();
-        final String packageName = apkPackageInfo.packageName;
-
-        // Signature hash function (保持原有中文错误信息)
-        Function<Signature, String> getSignatureHash = signature -> {
-            try {
-                MessageDigest md = MessageDigest.getInstance("SHA-256");
-                md.update(signature.toByteArray());
-                return Base64.encodeToString(md.digest(), Base64.NO_WRAP);
-            } catch (NoSuchAlgorithmException e) {
-                logErrorToConsole("检测到不支持的签名算法", e);
-                return null;
-            }
-        };
-
-        // Installed app check
-        boolean appInstalled = false;
-        PackageInfo installedPackageInfo = null;
+        // Start of modified signature checking logic
         try {
-            installedPackageInfo = pm.getPackageInfo(packageName, flag);
-            appInstalled = true;
-        } catch (PackageManager.NameNotFoundException ignored) {}
+            final String packageName;
+            final Signature[] apkSignatures;
 
-        // Signature verification
-        if (appInstalled && installedPackageInfo != null) {
-            Signature[] installedSignatures;
-            Signature[] apkSignatures;
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                installedSignatures = installedPackageInfo.signingInfo.getApkContentsSigners();
-                apkSignatures = apkPackageInfo.signingInfo.getApkContentsSigners();
-            } else {
-                installedSignatures = installedPackageInfo.signatures;
+            // First try normal package parsing
+            PackageInfo apkPackageInfo = getPackageManager().getPackageArchiveInfo(file.getAbsolutePath(), PackageManager.GET_SIGNATURES);
+            if (apkPackageInfo != null) {
+                packageName = apkPackageInfo.packageName;
                 apkSignatures = apkPackageInfo.signatures;
+            } else {
+                // Fallback to manual parsing for binary manifests
+                packageName = ApkParser.extractPackageName(file);
+                apkSignatures = ApkParser.extractSignatures(file);
             }
 
-            String installedSignature = (installedSignatures != null && installedSignatures.length > 0) ?
-                    getSignatureHash.apply(installedSignatures[0]) : null;
-            String apkSignature = (apkSignatures != null && apkSignatures.length > 0) ?
-                    getSignatureHash.apply(apkSignatures[0]) : null;
+            // Existing signature comparison logic
+            boolean appInstalled = false;
+            PackageInfo installedPackageInfo = null;
+            try {
+                installedPackageInfo = getPackageManager().getPackageInfo(packageName,
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.P ?
+                                PackageManager.GET_SIGNING_CERTIFICATES :
+                                PackageManager.GET_SIGNATURES);
+                appInstalled = true;
+            } catch (PackageManager.NameNotFoundException ignored) {}
 
-            if (installedSignature != null && apkSignature != null && !installedSignature.equals(apkSignature)) {
-                new AlertDialog.Builder(this)
-                        .setTitle("签名不匹配")
-                        .setMessage(apkName + "与已安装应用包名" + "（" + packageName + "）的签名不匹配。是否继续安装？（本操作将会导致应用数据丢失，请提前备份）")
-                        .setPositiveButton("是", (dialog, which) -> launchInstallIntent(uri, packageName, callback))
-                        .setNegativeButton("否", null)
-                        .show();
-                return;
+            if (appInstalled && installedPackageInfo != null) {
+                Signature[] installedSignatures = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ?
+                        installedPackageInfo.signingInfo.getApkContentsSigners() :
+                        installedPackageInfo.signatures;
+
+                Function<Signature, String> getSignatureHash = signature -> {
+                    try {
+                        MessageDigest md = MessageDigest.getInstance("SHA-256");
+                        md.update(signature.toByteArray());
+                        return Base64.encodeToString(md.digest(), Base64.NO_WRAP);
+                    } catch (NoSuchAlgorithmException e) {
+                        logErrorToConsole("检测到不支持的签名算法", e);
+                        return null;
+                    }
+                };
+
+                String installedHash = (installedSignatures != null && installedSignatures.length > 0) ?
+                        getSignatureHash.apply(installedSignatures[0]) : null;
+                String apkHash = (apkSignatures != null && apkSignatures.length > 0) ?
+                        getSignatureHash.apply(apkSignatures[0]) : null;
+
+                if (installedHash != null && apkHash != null && !installedHash.equals(apkHash)) {
+                    runOnUiThread(() ->
+                    new AlertDialog.Builder(this)
+                            .setTitle("签名不匹配")
+                            .setMessage(apkName + "与已安装应用包名" + "（" + packageName + "）的签名不匹配。是否继续安装？（本操作将会导致应用数据丢失，请提前备份！）")
+                            .setPositiveButton("是", (dialog, which) -> {
+                                installCallbackStack.push(callback);
+                                uninstallCallbackStack.push(result -> {
+                                    if (result) {
+                                        launchInstallIntent(uri, packageName);
+                                    } else {
+                                        callback.accept(false);
+                                    }
+                                });
+                                launchUninstallIntent(packageName);
+                            })
+                            .setNegativeButton("否", null)
+                            .show());
+                    return;
+                }
             }
+            installCallbackStack.push(callback);
+            launchInstallIntent(uri, packageName);
+        } catch (Exception e) {
+            logErrorToConsole("APK解析失败", e);
         }
-
-        launchInstallIntent(uri, packageName, callback);
     }
 
-    private void launchInstallIntent(Uri uri, String packageName, Consumer<Boolean> callback) {
+    private void launchUninstallIntent(String packageName) {
+        updateConsole("正在卸载APK...");
+        Uri packageUri = Uri.parse("package:" + packageName);
+        Intent intent = new Intent(Intent.ACTION_DELETE, packageUri)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        mUninstallPackage.set(packageName);
+        startActivity(intent);
+    }
+
+    private void launchInstallIntent(Uri uri, String packageName) {
         updateConsole("正在安装APK...");
         Intent intent = new Intent(Intent.ACTION_VIEW)
                 .setDataAndType(uri, "application/vnd.android.package-archive")
                 .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        installCallbackStack.push(callback);
         mInstallPackage.set(packageName);
         startActivity(intent);
     }
@@ -383,17 +396,41 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     updateConsole("APK安装失败");
                     for (Consumer<Boolean> installCallback : installCallbackStack) {
-                        installCallback.accept(true);
+                        installCallback.accept(false);
                     }
                 }
             } catch (PackageManager.NameNotFoundException e) {
                 updateConsole("APK安装失败");
                 for (Consumer<Boolean> installCallback : installCallbackStack) {
-                    installCallback.accept(true);
+                    installCallback.accept(false);
                 }
             }
             mInstallPackage.set("");
             installCallbackStack.clear();
+        }
+        if (!mUninstallPackage.get().isEmpty()) {
+            PackageManager pm = getPackageManager();
+            try {
+                PackageInfo packageInfo = pm.getPackageInfo(mUninstallPackage.get(), 0);
+                if (packageInfo != null) {
+                    updateConsole("APK卸载失败");
+                    for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
+                        uninstallCallback.accept(false);
+                    }
+                } else {
+                    updateConsole("APK卸载成功");
+                    for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
+                        uninstallCallback.accept(true);
+                    }
+                }
+            } catch (PackageManager.NameNotFoundException e) {
+                updateConsole("APK卸载成功");
+                for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
+                    uninstallCallback.accept(true);
+                }
+            }
+            mUninstallPackage.set("");
+            uninstallCallbackStack.clear();
         }
         super.onResume();
     }
