@@ -9,6 +9,9 @@ import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.content.pm.Signature;
 import android.net.Uri;
+import android.content.pm.ShortcutInfo;
+import android.content.pm.ShortcutManager;
+import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -60,6 +63,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_CODE = 1;
     private EditText serverUrlsInput;
     private Button startDownloadButton;
+    private Button createShortcutButton;
     private ProgressBar progressBar;
     private TextView progressText;
     private TextView consoleOutput;
@@ -106,6 +110,11 @@ public class MainActivity extends AppCompatActivity {
             if (userService != null) {
                 updateConsole("已挂载用户服务");
                 startDownloadButton.setEnabled(true);
+
+                // 如果从快捷方式启动，直接开始下载
+                if (getIntent().getAction().equals("com.asfu222.bajpdl.SHORTCUT")) {
+                    startDownloads();
+                }
             }
             else {
                 updateConsole("挂载用户服务失败，正在重试");
@@ -149,6 +158,7 @@ public class MainActivity extends AppCompatActivity {
         Switch useMITMSwitch = findViewById(R.id.useMITMSwitch);
         startDownloadButton = findViewById(R.id.startDownloadButton);
         installAPKButton = findViewById(R.id.installAPKButton);
+        createShortcutButton = findViewById(R.id.createShortcutButton);
         progressBar = findViewById(R.id.progressBar);
         progressText = findViewById(R.id.progressText);
         consoleScrollView = findViewById(R.id.consoleScrollView);
@@ -160,6 +170,7 @@ public class MainActivity extends AppCompatActivity {
         serverUrlsInput.setText(String.join(",", defaultServerUrls));
 
         startDownloadButton.setOnClickListener(v -> startDownloads());
+        createShortcutButton.setOnClickListener(v -> onCreateShortcutButtonPressed());
 
         redownloadSwitch.setChecked(gameFileManager.getAppConfig().shouldAlwaysRedownload());
         redownloadSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
@@ -241,6 +252,14 @@ public class MainActivity extends AppCompatActivity {
         } else {
             updateConsole("已获取存储权限");
             startDownloadButton.setEnabled(true);
+        }
+
+        // 如果是从快捷方式启动，禁用更新后打开蔚蓝档案开关，并锁定开启该功能
+        if (getIntent().getAction().equals("com.asfu222.bajpdl.SHORTCUT")) {
+            openBA.setEnabled(false);
+
+            gameFileManager.getAppConfig().setOpenBA(true);
+            gameFileManager.getAppConfig().saveConfig();
         }
     }
 
@@ -617,6 +636,25 @@ public class MainActivity extends AppCompatActivity {
         gameFileManager.getAppConfig().saveConfig();
 
         gameFileManager.startDownloads();
+    }
+
+    private void onCreateShortcutButtonPressed() {
+        // 请求向桌面添加快捷方式
+        ShortcutManager shortcutManager = getApplicationContext().getSystemService(ShortcutManager.class);
+
+        if (shortcutManager != null && shortcutManager.isRequestPinShortcutSupported()) {
+            Intent intent = new Intent(getApplicationContext(), MainActivity.class);
+            intent.setAction("com.asfu222.bajpdl.SHORTCUT");
+
+            ShortcutInfo shortcutInfo = new ShortcutInfo.Builder(getApplicationContext(), "launch_game")
+                    .setLongLabel("蔚蓝档案")
+                    .setShortLabel("蔚蓝档案")
+                    .setIcon(Icon.createWithResource(getApplicationContext(),R.drawable.ba_icon))
+                    .setIntent(intent)
+                    .build();
+
+            shortcutManager.requestPinShortcut(shortcutInfo, null);
+        }
     }
 
     private void requestStoragePermission() {
