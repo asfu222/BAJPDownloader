@@ -42,8 +42,8 @@ public abstract class EscalatedFS {
         contentProviderFS = provider;
     }
 
-    private static boolean needsEscalation() {
-        return !canReadWriteAndroidData();
+    private static boolean needsEscalation(Path path) {
+        return path.toString().contains("/Android/data/com.YostarJP.BlueArchive/files") && !canReadWriteAndroidData();
     }
 
     public static boolean canReadWriteAndroidData() {
@@ -52,7 +52,7 @@ public abstract class EscalatedFS {
     }
 
     public static Path createDirectories(Path path) throws IOException {
-        if (!needsEscalation()) {
+        if (!needsEscalation(path)) {
             return Files.createDirectories(path);
         }
 
@@ -77,7 +77,7 @@ public abstract class EscalatedFS {
     }
 
     public static OutputStream newOutputStream(Path path) throws IOException {
-        if (!needsEscalation()) {
+        if (!needsEscalation(path)) {
             return Files.newOutputStream(path);
         }
         if (shizukuService != null) {
@@ -101,7 +101,7 @@ public abstract class EscalatedFS {
     }
 
     public static InputStream newInputStream(Path path) throws IOException {
-        if (!needsEscalation()) {
+        if (!needsEscalation(path)) {
             return Files.newInputStream(path);
         }
         if (shizukuService != null) {
@@ -125,7 +125,7 @@ public abstract class EscalatedFS {
     }
 
     public static byte[] readAllBytes(Path path) throws IOException {
-        if (!needsEscalation()) {
+        if (!needsEscalation(path)) {
             return Files.readAllBytes(path);
         }
 
@@ -141,7 +141,7 @@ public abstract class EscalatedFS {
     }
 
     public static void deleteIfExists(Path path) throws IOException {
-        if (!needsEscalation()) {
+        if (!needsEscalation(path)) {
             Files.deleteIfExists(path);
             return;
         }
@@ -169,7 +169,7 @@ public abstract class EscalatedFS {
     }
 
     public static boolean exists(Path path) throws IOException {
-        if (!needsEscalation()) {
+        if (!needsEscalation(path)) {
             return Files.exists(path);
         }
 
@@ -192,7 +192,7 @@ public abstract class EscalatedFS {
     }
 
     public static void copy(Path source, Path target, java.nio.file.CopyOption... options) throws IOException {
-        if (!needsEscalation()) {
+        if (!needsEscalation(source) && !needsEscalation(target)) {
             Files.copy(source, target, options);
             return;
         }
@@ -275,7 +275,7 @@ public abstract class EscalatedFS {
     }
 
     public static long size(Path path) throws IOException {
-        if (!needsEscalation()) {
+        if (!needsEscalation(path)) {
             return Files.size(path);
         }
         if (shizukuService != null) {
@@ -320,7 +320,7 @@ public abstract class EscalatedFS {
     }
 
     public static Stream<Path> walk(Path start) throws IOException {
-        if (!needsEscalation()) {
+        if (!needsEscalation(start)) {
             return Files.walk(start);
         }
         if (contentProviderFS != null) {
