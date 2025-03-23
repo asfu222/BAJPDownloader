@@ -90,29 +90,36 @@ public class GameFileManager {
                             String newHash1 = new String(EscalatedFS.readAllBytes(hash1Path), StandardCharsets.UTF_8);
                             String newHash2 = new String(EscalatedFS.readAllBytes(hash2Path), StandardCharsets.UTF_8);
 
-                            return hashes[0] != null && hashes[0].equals(newHash1)
-                                    && hashes[1] != null && hashes[1].equals(newHash2);
+                            boolean apk1Unchanged = hashes[0] != null && hashes[0].equals(newHash1);
+                            boolean apk2Unchanged = hashes[1] != null && hashes[1].equals(newHash2);
+                            return new boolean[]{apk1Unchanged, apk2Unchanged};
                         } catch (IOException e) {
                             logError("读取服务器APK的哈希值时报错", e);
-                            return false;
+                            return new boolean[]{false, false};
                         }
                     });
-        }).thenCompose(unchanged -> {
-            if (unchanged) {
-                return CompletableFuture.completedFuture(null);
-            }
-
+        }).thenCompose(unchangedArray -> {
             Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
 
-            CompletableFuture<Path> apkDownload1 = fileDownloader.downloadAsync(
-                    "https://cdn.bluearchive.me/apk/蔚蓝档案.apk",
-                    cachePath.resolve("蔚蓝档案.apk"), path -> true, true, this::logError);
+            CompletableFuture<Path> apk1Future;
+            if (unchangedArray[0]) {
+                apk1Future = CompletableFuture.completedFuture(null);
+            } else {
+                apk1Future = fileDownloader.downloadAsync(
+                        "https://cdn.bluearchive.me/apk/蔚蓝档案.apk",
+                        cachePath.resolve("蔚蓝档案.apk"), path -> true, true, this::logError);
+            }
 
-            CompletableFuture<Path> apkDownload2 = fileDownloader.downloadAsync(
-                    "https://cdn.bluearchive.me/apk/mitmserver.apk",
-                    cachePath.resolve("mitmserver.apk"), path -> true, true, this::logError);
+            CompletableFuture<Path> apk2Future;
+            if (unchangedArray[1]) {
+                apk2Future = CompletableFuture.completedFuture(null);
+            } else {
+                apk2Future = fileDownloader.downloadAsync(
+                        "https://cdn.bluearchive.me/apk/mitmserver.apk",
+                        cachePath.resolve("mitmserver.apk"), path -> true, true, this::logError);
+            }
 
-            return CompletableFuture.allOf(apkDownload1, apkDownload2);
+            return CompletableFuture.allOf(apk1Future, apk2Future);
         });
     }
 

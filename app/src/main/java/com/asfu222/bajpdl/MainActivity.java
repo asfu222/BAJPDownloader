@@ -339,8 +339,8 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(() ->
                     new AlertDialog.Builder(this)
                             .setTitle("签名不匹配")
-                            .setMessage(apkName + "与已安装应用包名" + "（" + packageName + "）的签名不匹配。是否继续安装？（本操作将会导致应用数据丢失，请提前备份！）")
-                            .setPositiveButton("是", (dialog, which) -> {
+                            .setMessage(apkName + "与已安装应用包名重叠" + "（" + packageName + "）但是签名不匹配。是否继续安装？（本操作将会导致应用数据丢失，请提前备份！）")
+                            .setPositiveButton("是，卸载原应用", (dialog, which) -> {
                                 installCallbackStack.push(callback);
                                 uninstallCallbackStack.push(result -> {
                                     if (result) {
@@ -351,7 +351,7 @@ public class MainActivity extends AppCompatActivity {
                                 });
                                 launchUninstallIntent(packageName);
                             })
-                            .setNegativeButton("否", null)
+                            .setNegativeButton("否，取消安装", null)
                             .show());
                     return;
                 }
