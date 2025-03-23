@@ -183,8 +183,7 @@ public class MainActivity extends AppCompatActivity {
         useMITMSwitch.setOnCheckedChangeListener(((buttonView, isChecked) -> {
             gameFileManager.getAppConfig().setUseMITM(isChecked);
             gameFileManager.getAppConfig().saveConfig();
-            if (!isMITMAvailable()) updateConsole("请点击安装MITM服务");
-            else setupMITM();
+            setupEscalatedPermissions();
             updateDownloadAPKButtonText();
         }));
 
@@ -390,19 +389,25 @@ public class MainActivity extends AppCompatActivity {
                 PackageInfo packageInfo = pm.getPackageInfo(mInstallPackage.get(), 0);
                 if (packageInfo != null) {
                     updateConsole("APK安装成功");
-                    for (Consumer<Boolean> installCallback : installCallbackStack) {
-                        installCallback.accept(true);
+                    synchronized (installCallbackStack) {
+                        for (Consumer<Boolean> installCallback : installCallbackStack) {
+                            installCallback.accept(true);
+                        }
                     }
                 } else {
                     updateConsole("APK安装失败");
-                    for (Consumer<Boolean> installCallback : installCallbackStack) {
-                        installCallback.accept(false);
+                    synchronized (installCallbackStack) {
+                        for (Consumer<Boolean> installCallback : installCallbackStack) {
+                            installCallback.accept(false);
+                        }
                     }
                 }
             } catch (PackageManager.NameNotFoundException e) {
                 updateConsole("APK安装失败");
-                for (Consumer<Boolean> installCallback : installCallbackStack) {
-                    installCallback.accept(false);
+                synchronized (installCallbackStack) {
+                    for (Consumer<Boolean> installCallback : installCallbackStack) {
+                        installCallback.accept(false);
+                    }
                 }
             }
             mInstallPackage.set("");
@@ -414,19 +419,25 @@ public class MainActivity extends AppCompatActivity {
                 PackageInfo packageInfo = pm.getPackageInfo(mUninstallPackage.get(), 0);
                 if (packageInfo != null) {
                     updateConsole("APK卸载失败");
-                    for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
-                        uninstallCallback.accept(false);
+                    synchronized (uninstallCallbackStack) {
+                        for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
+                            uninstallCallback.accept(false);
+                        }
                     }
                 } else {
                     updateConsole("APK卸载成功");
-                    for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
-                        uninstallCallback.accept(true);
+                    synchronized (uninstallCallbackStack) {
+                        for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
+                            uninstallCallback.accept(true);
+                        }
                     }
                 }
             } catch (PackageManager.NameNotFoundException e) {
                 updateConsole("APK卸载成功");
-                for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
-                    uninstallCallback.accept(true);
+                synchronized (uninstallCallbackStack) {
+                    for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
+                        uninstallCallback.accept(true);
+                    }
                 }
             }
             mUninstallPackage.set("");
