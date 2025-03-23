@@ -1,11 +1,9 @@
 package com.asfu222.bajpdl.core;
 
-import android.app.Activity;
-import android.content.ComponentName;
 import android.content.Context;
-import android.content.Intent;
 
 import com.asfu222.bajpdl.MainActivity;
+import com.asfu222.bajpdl.config.AppCache;
 import com.asfu222.bajpdl.config.AppConfig;
 import com.asfu222.bajpdl.service.CommonCatalogItem;
 import com.asfu222.bajpdl.service.FileDownloader;
@@ -16,7 +14,7 @@ import com.asfu222.bajpdl.util.FileUtils;
 import org.json.JSONException;
 
 import java.io.IOException;
-import java.nio.file.Files;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -31,6 +29,7 @@ public class GameFileManager {
 
     private final FileDownloader fileDownloader;
     private final AppConfig appConfig;
+    private final AppCache appCache;
     private final Path dataPath;
     private final Context appContext;
     private final AtomicInteger totalFiles = new AtomicInteger();
@@ -40,6 +39,7 @@ public class GameFileManager {
 
     public GameFileManager(Context context) {
         this.appConfig = new AppConfig(context, this::logError);
+        this.appCache = new AppCache(context);
         this.fileDownloader = new FileDownloader(appConfig);
         this.dataPath = context.getExternalMediaDirs()[0].toPath();
         this.appContext = context;
@@ -47,6 +47,73 @@ public class GameFileManager {
 
     public AppConfig getAppConfig() {
         return appConfig;
+    }
+
+    public AppCache getAppCache() {
+        return appCache;
+    }
+
+    public CompletableFuture<Void> downloadServerAPKs() {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
+
+                // Read existing hashes (if present)
+                Path hash1Path = cachePath.resolve("蔚蓝档案.apk.hash");
+                Path hash2Path = cachePath.resolve("mitmserver.apk.hash");
+
+                String hash1 = EscalatedFS.exists(hash1Path) ? new String(EscalatedFS.readAllBytes(hash1Path), StandardCharsets.UTF_8) : null;
+                String hash2 = EscalatedFS.exists(hash2Path) ? new String(EscalatedFS.readAllBytes(hash2Path), StandardCharsets.UTF_8) : null;
+
+                return new String[]{hash1, hash2};
+            } catch (IOException e) {
+                logError("读取本地APK的哈希值时报错", e);
+                return new String[]{null, null};
+            }
+        }).thenCompose(hashes -> {
+            Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
+            Path hash1Path = cachePath.resolve("蔚蓝档案.apk.hash");
+            Path hash2Path = cachePath.resolve("mitmserver.apk.hash");
+
+            CompletableFuture<Path> hashDownload1 = fileDownloader.downloadAsync(
+                    "https://cdn.bluearchive.me/apk/蔚蓝档案.apk.hash",
+                    hash1Path, path -> true, true, this::logError);
+
+            CompletableFuture<Path> hashDownload2 = fileDownloader.downloadAsync(
+                    "https://cdn.bluearchive.me/apk/mitmserver.apk.hash",
+                    hash2Path, path -> true, true, this::logError);
+
+            return CompletableFuture.allOf(hashDownload1, hashDownload2)
+                    .thenApply(ignored -> {
+                        try {
+                            // Read the newly downloaded hashes
+                            String newHash1 = new String(EscalatedFS.readAllBytes(hash1Path), StandardCharsets.UTF_8);
+                            String newHash2 = new String(EscalatedFS.readAllBytes(hash2Path), StandardCharsets.UTF_8);
+
+                            return hashes[0] != null && hashes[0].equals(newHash1)
+                                    && hashes[1] != null && hashes[1].equals(newHash2);
+                        } catch (IOException e) {
+                            logError("读取服务器APK的哈希值时报错", e);
+                            return false;
+                        }
+                    });
+        }).thenCompose(unchanged -> {
+            if (unchanged) {
+                return CompletableFuture.completedFuture(null);
+            }
+
+            Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
+
+            CompletableFuture<Path> apkDownload1 = fileDownloader.downloadAsync(
+                    "https://cdn.bluearchive.me/apk/蔚蓝档案.apk",
+                    cachePath.resolve("蔚蓝档案.apk"), path -> true, true, this::logError);
+
+            CompletableFuture<Path> apkDownload2 = fileDownloader.downloadAsync(
+                    "https://cdn.bluearchive.me/apk/mitmserver.apk",
+                    cachePath.resolve("mitmserver.apk"), path -> true, true, this::logError);
+
+            return CompletableFuture.allOf(apkDownload1, apkDownload2);
+        });
     }
 
     public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
@@ -134,15 +201,7 @@ public class GameFileManager {
                     .thenAccept(v -> {
                         log("已完成更新");
                         if (appConfig.shouldOpenBA()) {
-                            Intent intent = new Intent();
-                            intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", "com.yostarjp.bluearchive.MxUnityPlayerActivity"));
-                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                            appContext.startActivity(intent);
-                            System.runFinalization();
-
-                            if (appContext instanceof Activity) {
-                                ((Activity)appContext).finishAffinity();
-                            }
+                            ((MainActivity) appContext).openBlueArchive();
                         }
                         isDownloading = false;
                     });
@@ -153,15 +212,19 @@ public class GameFileManager {
         return fileDownloader.downloadFile(dataPath, catalogPath, path -> true, true, this::logError, CommonCatalogItem.EMPTY).thenCompose(path -> {
             try {
                 log("已下载 " + catalogPath + ", 处理中...");
+                //long catalogCrc = FileUtils.calculateCRC32(path);
                 MXCatalog catalog;
                 switch (catalogPath) {
                     case "TableBundles/TableCatalog.bytes":
+                        //if (catalogCrc == appCache.getTbCrc()) return CompletableFuture.completedFuture(true);
                         catalog = MXCatalog.parseMemoryPackerBytes(EscalatedFS.readAllBytes(path), false);
                         break;
                     case "MediaResources/Catalog/MediaCatalog.bytes":
+                        //if (catalogCrc == appCache.getMpCrc()) return CompletableFuture.completedFuture(true);
                         catalog = MXCatalog.parseMemoryPackerBytes(EscalatedFS.readAllBytes(path), true);
                         break;
                     case "Android/bundleDownloadInfo.json":
+                        //if (catalogCrc == appCache.getAbCrc()) return CompletableFuture.completedFuture(true);
                         catalog = MXCatalog.parseBundleDLInfoJson(EscalatedFS.readAllBytes(path));
                         break;
                     default:
@@ -197,6 +260,7 @@ public class GameFileManager {
         });
     }
 
+    /*
     public void startReplacements() {
         try (var paths = EscalatedFS.walk(dataPath)) {
                 CompletableFuture.allOf(paths
@@ -215,6 +279,7 @@ public class GameFileManager {
             logError("Error walking directory", e);
         }
     }
+     */
 
     public void shutdown() {
         fileDownloader.shutdown();

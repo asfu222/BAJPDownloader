@@ -24,7 +24,7 @@
         android:id="@+id/redownloadSwitch"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="使用覆盖下载（不缓存）"
+        android:text="使用覆盖下载（不缓存，重新下载所有文件！）"
         app:layout_constraintTop_toBottomOf="@id/serverUrlsInput"
         app:layout_constraintStart_toStartOf="parent"
         android:layout_marginTop="8dp" />
@@ -38,23 +38,22 @@
         app:layout_constraintTop_toBottomOf="@id/redownloadSwitch"
         app:layout_constraintStart_toStartOf="parent"
         android:layout_marginTop="8dp" />
-    <Switch
-        android:id="@+id/downloadStraightToGameSwitch"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="直接下载至游戏目录"
-        app:layout_constraintTop_toBottomOf="@id/downloadCustomOnlySwitch"
-        app:layout_constraintStart_toStartOf="parent"
-        android:layout_marginTop="8dp" />
-		
 	<Switch
         android:id="@+id/openBASwitch"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="更新后打开蔚蓝档案"
-        app:layout_constraintTop_toBottomOf="@id/downloadStraightToGameSwitch"
+        app:layout_constraintTop_toBottomOf="@id/downloadCustomOnlySwitch"
         app:layout_constraintStart_toStartOf="parent"
         android:layout_marginTop="8dp" />
+	<Switch
+		android:id="@+id/useMITMSwitch"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="使用MITM（安卓包名劫持）方案"
+		app:layout_constraintTop_toBottomOf="@id/openBASwitch"
+		app:layout_constraintStart_toStartOf="parent"
+		android:layout_marginTop="8dp" />
     <!-- Batch Size Input -->
     <EditText
         android:id="@+id/batchSizeInput"
@@ -62,21 +61,34 @@
         android:layout_height="wrap_content"
         android:hint="下载线路数"
         android:inputType="number"
-        app:layout_constraintTop_toBottomOf="@id/openBASwitch"
+        app:layout_constraintTop_toBottomOf="@id/useMITMSwitch"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="8dp" />
 
     <!-- Download and Replace Button -->
-    <Button
-        android:id="@+id/startDownloadButton"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:text="更新资源"
-        app:layout_constraintTop_toBottomOf="@id/batchSizeInput"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        android:layout_marginTop="16dp" />
+	<Button
+		android:id="@+id/startDownloadButton"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:text="更新资源"
+		app:layout_constraintTop_toBottomOf="@id/batchSizeInput"
+		app:layout_constraintStart_toStartOf="parent"
+		app:layout_constraintEnd_toStartOf="@id/installAPKButton"
+		android:layout_marginTop="16dp"
+		android:layout_marginEnd="8dp" />
+
+	<Button
+		android:id="@+id/installAPKButton"
+		android:layout_width="0dp"
+		android:layout_height="wrap_content"
+		android:text="安装游戏客户端"
+		app:layout_constraintTop_toBottomOf="@id/batchSizeInput"
+		app:layout_constraintStart_toEndOf="@id/startDownloadButton"
+		app:layout_constraintEnd_toEndOf="parent"
+		android:layout_marginTop="16dp"
+		android:layout_marginStart="8dp" />
+
 
     <!-- Horizontal Progress Bar -->
     <ProgressBar

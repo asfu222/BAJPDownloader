@@ -64,7 +64,7 @@ public abstract class EscalatedFS {
             }
         } else if (rootAvailable) {
             try {
-                execEscalated("mkdir -p " + path.toString()).waitFor();
+                execEscalated("mkdir -p " + path).waitFor();
             } catch (InterruptedException e) {
                 throw new IOException("创建文件夹时报错：" + e.getMessage(), e);
             }

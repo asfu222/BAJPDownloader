@@ -23,7 +23,8 @@ import java.util.function.BiConsumer;
 public class AppConfig {
     private boolean alwaysRedownload = false;
     private boolean downloadCustomOnly = true;
-    private boolean downloadStraightToGame = true;
+
+    private boolean useMITM = false;
 
     private boolean openBA = true;
     private List<String> serverUrls;
@@ -82,11 +83,15 @@ public class AppConfig {
     }
 
     public boolean shouldDownloadStraightToGame() {
-        return downloadStraightToGame;
+        return true;
     }
 
-    public void setDownloadStraightToGame(boolean downloadStraightToGame) {
-        this.downloadStraightToGame = downloadStraightToGame;
+    public boolean shouldUseMITM() {
+        return useMITM;
+    }
+
+    public void setUseMITM(boolean useMITM) {
+        this.useMITM = useMITM;
     }
 
     private void loadConfig() {
@@ -99,8 +104,8 @@ public class AppConfig {
                 downloadCustomOnly = json.optBoolean("downloadCustomOnly", true);
                 JSONArray urlsArray = json.getJSONArray("serverUrls");
                 concurrentDownloads = json.optInt("concurrentDownloads", 20);
-                downloadStraightToGame = json.optBoolean("downloadStraightToGame", true);
                 openBA = json.optBoolean("openBA", true);
+                useMITM = json.optBoolean("useMITM", false);
                 serverUrls = new ArrayList<>();
                 for (int i = 0; i < urlsArray.length(); i++) {
                     serverUrls.add(urlsArray.getString(i));
@@ -140,25 +145,28 @@ private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
                     throw new IOException("HTTP response code: " + responseCode);
                 }
 
-                String fetchedUrl = null;
+                String[] fetchedUrl = new String[2];
                 try (BufferedReader in = new BufferedReader(new InputStreamReader(connection.getInputStream()))) {
                     String line;
                     while ((line = in.readLine()) != null) {
+                        if (line.startsWith("BA_SERVER_URL=")) {
+                            fetchedUrl[0] = line.split("=", 2)[1];
+                        }
                         if (line.startsWith("ADDRESSABLE_CATALOG_URL=")) {
-                            fetchedUrl = line.split("=", 2)[1];
+                            fetchedUrl[1] = line.split("=", 2)[1];
                             break;
                         }
                     }
                 }
 
-                if (fetchedUrl != null) {
+                if (fetchedUrl[0] != null && fetchedUrl[1] != null) {
                     synchronized (this) {
-                        fallbackUrl = fetchedUrl;
+                        fallbackUrl = fetchedUrl[1];
                     }
                     System.out.println("Successfully fetched fallback URL: " + fallbackUrl);
                     return;
                 } else {
-                    throw new IOException("ADDRESSABLE_CATALOG_URL not found in response.");
+                    throw new IOException("ADDRESSABLE_CATALOG_URL or BA_SERVER_URL not found in response.");
                 }
 
             } catch (Exception e) {
@@ -194,8 +202,8 @@ private void fetchFallbackUrl(BiConsumer<String, Exception> handler) {
             JSONArray urlsArray = new JSONArray(serverUrls);
             json.put("serverUrls", urlsArray);
             json.put("concurrentDownloads", concurrentDownloads);
-            json.put("downloadStraightToGame", downloadStraightToGame);
             json.put("openBA", openBA);
+            json.put("useMITM", shouldUseMITM());
             writer.write(json.toString());
         } catch (IOException | JSONException e) {
             e.printStackTrace();

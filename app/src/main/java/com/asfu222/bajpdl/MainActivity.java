@@ -2,14 +2,19 @@ package com.asfu222.bajpdl;
 
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.Intent;
 import android.content.ServiceConnection;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
+import android.content.pm.Signature;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.IBinder;
+import android.provider.Settings;
+import android.util.Base64;
 import android.view.View;
 import android.view.inputmethod.EditorInfo;
 import android.view.inputmethod.InputMethodManager;
@@ -19,10 +24,14 @@ import android.widget.ProgressBar;
 import android.widget.Switch;
 import android.widget.TextView;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.annotation.NonNull;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.core.widget.NestedScrollView;
 
 import com.asfu222.bajpdl.core.GameFileManager;
@@ -31,11 +40,18 @@ import com.asfu222.bajpdl.shizuku.ShizukuService;
 import com.asfu222.bajpdl.util.ContentProviderFS;
 import com.asfu222.bajpdl.util.EscalatedFS;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Stack;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 import rikka.shizuku.Shizuku;
 
@@ -51,6 +67,8 @@ public class MainActivity extends AppCompatActivity {
     private boolean shizukuBinderReceived = false;
     private boolean permissionRequested = false;
     private EditText batchSizeInput;
+
+    private Button installAPKButton;
 
     private final Shizuku.OnRequestPermissionResultListener shizukuPermissionListener =
             (requestCode, grantResult) -> {
@@ -75,9 +93,7 @@ public class MainActivity extends AppCompatActivity {
     private final Shizuku.OnBinderDeadListener binderDeadListener = () -> {
         shizukuBinderReceived = false;
         updateConsole("Shizuku服务断开");
-        runOnUiThread(() -> {
-            startDownloadButton.setEnabled(false);
-        });
+        runOnUiThread(() -> startDownloadButton.setEnabled(false));
     };
 
     private IUserService userService;
@@ -116,6 +132,9 @@ public class MainActivity extends AppCompatActivity {
         Shizuku.bindUserService(createServiceArgs(), userServiceConnection);
     }
 
+
+    private final AtomicReference<String> mInstallPackage = new AtomicReference<>("");
+    private final Stack<Consumer<Boolean>> installCallbackStack = new Stack<>();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -123,9 +142,10 @@ public class MainActivity extends AppCompatActivity {
         serverUrlsInput = findViewById(R.id.serverUrlsInput);
         Switch redownloadSwitch = findViewById(R.id.redownloadSwitch);
         Switch downloadCustomOnlySwitch = findViewById(R.id.downloadCustomOnlySwitch);
-        Switch downloadStraightToGameSwitch = findViewById(R.id.downloadStraightToGameSwitch);
         Switch openBA = findViewById(R.id.openBASwitch);
+        Switch useMITMSwitch = findViewById(R.id.useMITMSwitch);
         startDownloadButton = findViewById(R.id.startDownloadButton);
+        installAPKButton = findViewById(R.id.installAPKButton);
         progressBar = findViewById(R.id.progressBar);
         progressText = findViewById(R.id.progressText);
         consoleScrollView = findViewById(R.id.consoleScrollView);
@@ -150,17 +170,20 @@ public class MainActivity extends AppCompatActivity {
             gameFileManager.getAppConfig().saveConfig();
         });
 
-        downloadStraightToGameSwitch.setChecked(gameFileManager.getAppConfig().shouldDownloadStraightToGame());
-        downloadStraightToGameSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            gameFileManager.getAppConfig().setDownloadStraightToGame(isChecked);
-            gameFileManager.getAppConfig().saveConfig();
-        });
-
         openBA.setChecked(gameFileManager.getAppConfig().shouldOpenBA());
         openBA.setOnCheckedChangeListener((buttonView, isChecked) -> {
             gameFileManager.getAppConfig().setOpenBA(isChecked);
             gameFileManager.getAppConfig().saveConfig();
         });
+
+        useMITMSwitch.setChecked(gameFileManager.getAppConfig().shouldUseMITM());
+        useMITMSwitch.setOnCheckedChangeListener(((buttonView, isChecked) -> {
+            gameFileManager.getAppConfig().setUseMITM(isChecked);
+            gameFileManager.getAppConfig().saveConfig();
+            if (!isMITMAvailable()) updateConsole("请点击安装MITM服务");
+            else setupMITM();
+            updateDownloadAPKButtonText();
+        }));
 
         serverUrlsInput.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_DONE) {
@@ -184,7 +207,34 @@ public class MainActivity extends AppCompatActivity {
             return false;
         });
 
+        installAPKButton.setOnClickListener(v -> {
+            runOnUiThread(() -> installAPKButton.setEnabled(false));
+            updateConsole("正在获取APK，请稍等...");
+            if (gameFileManager.getAppConfig().shouldUseMITM() && !isMITMAvailable()) {
+                gameFileManager.downloadServerAPKs().thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("mitmserver.apk", result -> {
+                    if (result) {
+                        updateConsole("安装MITM服务成功");
+                        setupMITM();
+                        installAPKButton.setText("安装游戏客户端");
+                    } else {
+                        updateConsole("安装MITM服务失败");
+                    }
+                })));
+            } else {
+                gameFileManager.downloadServerAPKs().thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("蔚蓝档案.apk", result -> {
+                    if (result) {
+                        updateConsole("安装游戏客户端成功");
+                        updateDownloadAPKButtonText();
+                    } else {
+                        updateConsole("安装游戏客户端失败");
+                    }
+                })));
+            }
+        });
+
+        updateDownloadAPKButtonText();
         if (!EscalatedFS.canReadWriteAndroidData()) {
+            startDownloadButton.setEnabled(false);
             setupEscalatedPermissions();
         } else {
             updateConsole("已获取存储权限");
@@ -192,14 +242,169 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void setupEscalatedPermissions() {
-        if (isMITMAvailable()) {
-            try (var res = getContentResolver().query(Uri.parse("content://com.asfu222.bajpdl.mitm.fs"), null, null, null, null)) {
-                updateConsole("检测到MITM权限");
-                EscalatedFS.setContentProvider(new ContentProviderFS(getContentResolver()));
-                startDownloadButton.setEnabled(true);
+    private void updateDownloadAPKButtonText() {
+        runOnUiThread(() -> {
+            if (gameFileManager.getAppConfig().shouldUseMITM() && !isMITMAvailable()) {
+                installAPKButton.setText("安装MITM服务");
+            } else {
+                installAPKButton.setText("安装游戏客户端");
+            }
+        });
+    }
+
+    public void openBlueArchive() {
+        if (gameFileManager.getAppConfig().shouldUseMITM() && isMITMAvailable()) {
+            installCallbackStack.push(s -> {
+                if (s) {
+                    openBlueArchive();
+                }
+            });
+            installAPKButton.callOnClick();
+            return;
+        }
+        Intent intent = new Intent();
+        intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", "com.yostarjp.bluearchive.MxUnityPlayerActivity"));
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        startActivity(intent);
+        System.runFinalization();
+        finishAffinity();
+    }
+
+    private void installAPKFromCache(String apkName, Consumer<Boolean> callback) {
+        File file = new File(getExternalFilesDir("bajpdl_cache"), apkName);
+
+        if (!file.exists()) {
+            updateConsole("APK file not found: " + file.getAbsolutePath());
+            return;
+        }
+        if (!file.canRead()) {
+            updateConsole("APK file not readable: " + file.getAbsolutePath());
+            return;
+        }
+
+        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".provider", file);
+        if (true) {
+            launchInstallIntent(uri, "com.YostarJP.BlueArchive", callback);
+            return;
+        }
+        PackageManager pm = getPackageManager();
+        /*
+        int flag = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) ?
+                PackageManager.GET_SIGNING_CERTIFICATES :
+                PackageManager.GET_SIGNATURES;
+         */
+        int flag = PackageManager.GET_META_DATA;
+        // APK parsing
+        PackageInfo apkPackageInfo = pm.getPackageArchiveInfo(file.getAbsolutePath(), flag);
+        if (apkPackageInfo == null) {
+            updateConsole("Failed to parse APK file: " + file.getAbsolutePath());
+            return;
+        }
+
+        // Set application info paths
+        apkPackageInfo.applicationInfo.sourceDir = file.getAbsolutePath();
+        apkPackageInfo.applicationInfo.publicSourceDir = file.getAbsolutePath();
+        final String packageName = apkPackageInfo.packageName;
+
+        // Signature hash function (保持原有中文错误信息)
+        Function<Signature, String> getSignatureHash = signature -> {
+            try {
+                MessageDigest md = MessageDigest.getInstance("SHA-256");
+                md.update(signature.toByteArray());
+                return Base64.encodeToString(md.digest(), Base64.NO_WRAP);
+            } catch (NoSuchAlgorithmException e) {
+                logErrorToConsole("检测到不支持的签名算法", e);
+                return null;
+            }
+        };
+
+        // Installed app check
+        boolean appInstalled = false;
+        PackageInfo installedPackageInfo = null;
+        try {
+            installedPackageInfo = pm.getPackageInfo(packageName, flag);
+            appInstalled = true;
+        } catch (PackageManager.NameNotFoundException ignored) {}
+
+        // Signature verification
+        if (appInstalled && installedPackageInfo != null) {
+            Signature[] installedSignatures;
+            Signature[] apkSignatures;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                installedSignatures = installedPackageInfo.signingInfo.getApkContentsSigners();
+                apkSignatures = apkPackageInfo.signingInfo.getApkContentsSigners();
+            } else {
+                installedSignatures = installedPackageInfo.signatures;
+                apkSignatures = apkPackageInfo.signatures;
+            }
+
+            String installedSignature = (installedSignatures != null && installedSignatures.length > 0) ?
+                    getSignatureHash.apply(installedSignatures[0]) : null;
+            String apkSignature = (apkSignatures != null && apkSignatures.length > 0) ?
+                    getSignatureHash.apply(apkSignatures[0]) : null;
+
+            if (installedSignature != null && apkSignature != null && !installedSignature.equals(apkSignature)) {
+                new AlertDialog.Builder(this)
+                        .setTitle("签名不匹配")
+                        .setMessage(apkName + "与已安装应用包名" + "（" + packageName + "）的签名不匹配。是否继续安装？（本操作将会导致应用数据丢失，请提前备份）")
+                        .setPositiveButton("是", (dialog, which) -> launchInstallIntent(uri, packageName, callback))
+                        .setNegativeButton("否", null)
+                        .show();
                 return;
             }
+        }
+
+        launchInstallIntent(uri, packageName, callback);
+    }
+
+    private void launchInstallIntent(Uri uri, String packageName, Consumer<Boolean> callback) {
+        updateConsole("正在安装APK...");
+        Intent intent = new Intent(Intent.ACTION_VIEW)
+                .setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        installCallbackStack.push(callback);
+        mInstallPackage.set(packageName);
+        startActivity(intent);
+    }
+
+    @Override
+    protected void onResume() {
+        if (!mInstallPackage.get().isEmpty()) {
+            PackageManager pm = getPackageManager();
+            try {
+                PackageInfo packageInfo = pm.getPackageInfo(mInstallPackage.get(), 0);
+                if (packageInfo != null) {
+                    updateConsole("APK安装成功");
+                    for (Consumer<Boolean> installCallback : installCallbackStack) {
+                        installCallback.accept(true);
+                    }
+                } else {
+                    updateConsole("APK安装失败");
+                    for (Consumer<Boolean> installCallback : installCallbackStack) {
+                        installCallback.accept(true);
+                    }
+                }
+            } catch (PackageManager.NameNotFoundException e) {
+                updateConsole("APK安装失败");
+                for (Consumer<Boolean> installCallback : installCallbackStack) {
+                    installCallback.accept(true);
+                }
+            }
+            mInstallPackage.set("");
+            installCallbackStack.clear();
+        }
+        super.onResume();
+    }
+
+    private void setupEscalatedPermissions() {
+        if (gameFileManager.getAppConfig().shouldUseMITM()) {
+            if (!isMITMAvailable()) {
+                updateConsole("请点击安装MITM服务");
+            }
+            else setupMITM();
+            return;
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             startDownloadButton.setEnabled(false);
@@ -226,6 +431,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void setupMITM() {
+        try (var res = getContentResolver().query(Uri.parse("content://com.asfu222.bajpdl.mitm.fs"), null, null, null, null)) {
+            updateConsole("检测到MITM权限");
+            EscalatedFS.setContentProvider(new ContentProviderFS(getContentResolver()));
+            startDownloadButton.setEnabled(true);
+        }
+    }
+
     private boolean isMITMAvailable() {
         ProviderInfo providerInfo = null;
         try {
@@ -234,25 +447,6 @@ public class MainActivity extends AppCompatActivity {
             logErrorToConsole("检测内容提供者时报错", e);
         }
         return providerInfo != null;
-    }
-
-
-    // Add this to handle activity resume cases
-    @Override
-    protected void onResume() {
-        super.onResume();
-
-        // Re-check Shizuku status when activity resumes
-        if (!EscalatedFS.canReadWriteAndroidData() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isRootAvailable() && !shizukuBinderReceived && !isMITMAvailable()) {
-            updateConsole("活动恢复，正在检查Shizuku服务状态...");
-            if (Shizuku.pingBinder()) {
-                updateConsole("Shizuku服务已运行");
-                shizukuBinderReceived = true;
-                checkShizukuPermission();
-            } else {
-                updateConsole("Shizuku服务未运行");
-            }
-        }
     }
 
     private boolean isRootAvailable() {
@@ -265,6 +459,30 @@ public class MainActivity extends AppCompatActivity {
         } catch (Exception e) {
             return false;
         }
+    }
+    private final AtomicReference<Runnable> installPermsCallback = new AtomicReference<>();
+    private final ActivityResultLauncher<Intent> installPermsLauncher = registerForActivityResult(
+            new ActivityResultContracts.StartActivityForResult(),
+            result -> {
+                if (getPackageManager().canRequestPackageInstalls()) {
+                    updateConsole("已获取安装应用权限");
+                    installPermsCallback.get().run();
+                } else {
+                    updateConsole("未获取安装应用权限");
+                }
+            }
+    );
+    private void requestInstallPerms(Runnable callback) {
+        updateConsole("正在获取安装应用权限...");
+        if (getPackageManager().canRequestPackageInstalls()) {
+            updateConsole("已获取安装应用权限");
+            callback.run();
+            return;
+        }
+        Intent intent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:" + getPackageName()));
+        installPermsCallback.set(callback);
+        installPermsLauncher.launch(intent);
     }
 
     private void checkShizukuPermission() {

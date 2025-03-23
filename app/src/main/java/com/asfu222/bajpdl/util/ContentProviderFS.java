@@ -33,7 +33,6 @@ public class ContentProviderFS {
         Uri uri = buildUri(path);
         try (Cursor cursor = contentResolver.query(uri, new String[]{"size"}, null, null, null)) {
             if (cursor != null && cursor.moveToFirst()) {
-                System.out.println("Getting size of " + path + " " + cursor.getLong(1));
                 return cursor.getLong(1);
             }
         }

@@ -8,16 +8,12 @@ import org.json.JSONArray;
 import org.json.JSONException;
 
 import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -28,7 +24,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
-import java.util.function.LongSupplier;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -133,6 +128,30 @@ public class FileDownloader {
             .connectTimeout(10000, java.util.concurrent.TimeUnit.MILLISECONDS) // 10 seconds
             .readTimeout(20000, java.util.concurrent.TimeUnit.MILLISECONDS)    // 20 seconds
             .build();
+
+    public CompletableFuture<Path> downloadAsync(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler) {
+        return CompletableFuture.supplyAsync(() -> {
+            int attempts = 5;
+            int delay = 5000; // 5 seconds
+            for (int i = 0; i < attempts; i++) {
+                Path result = null;
+                try {
+                    result = downloadSingleFile(fileUrl, dest, verifier, replace);
+                } catch (IOException e) {
+                    handler.accept("从" + fileUrl + "下载时报错：" , e);
+                }
+                if (result != null) {
+                    return result;
+                }
+                try {
+                    Thread.sleep(delay);
+                } catch (InterruptedException e) {
+                    handler.accept("从" + fileUrl + "下载时报错：" , e);
+                }
+            }
+            return null;
+        }, executorService);
+    }
 
     private Path downloadSingleFile(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace) throws IOException {
         // Check if file exists and is valid
