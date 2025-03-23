@@ -79,7 +79,6 @@ public class MainActivity extends AppCompatActivity {
             (requestCode, grantResult) -> {
                 if (requestCode == REQUEST_CODE) {
                     if (grantResult == PackageManager.PERMISSION_GRANTED) {
-                        startDownloadButton.setEnabled(true);
                         updateConsole("已获取Shizuku权限");
                         bindShizukuUserService();
                     } else {
@@ -109,12 +108,7 @@ public class MainActivity extends AppCompatActivity {
             EscalatedFS.setShizukuService(userService);
             if (userService != null) {
                 updateConsole("已挂载用户服务");
-                startDownloadButton.setEnabled(true);
-
-                // 如果从快捷方式启动，直接开始下载
-                if (getIntent().getAction().equals("com.asfu222.bajpdl.SHORTCUT")) {
-                    startDownloads();
-                }
+                updateEscalatedPermissions(true);
             }
             else {
                 updateConsole("挂载用户服务失败，正在重试");
@@ -147,6 +141,7 @@ public class MainActivity extends AppCompatActivity {
     private final Stack<Consumer<Boolean>> installCallbackStack = new Stack<>();
     private final AtomicReference<String> mUninstallPackage = new AtomicReference<>("");
     private final Stack<Consumer<Boolean>> uninstallCallbackStack = new Stack<>();
+    private final Stack<Runnable> onGrantEscalatedPermission = new Stack<>();
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -165,7 +160,6 @@ public class MainActivity extends AppCompatActivity {
         consoleOutput = findViewById(R.id.consoleOutput);
 
         gameFileManager = new GameFileManager(this);
-
         List<String> defaultServerUrls = gameFileManager.getAppConfig().getServerUrls();
         serverUrlsInput.setText(String.join(",", defaultServerUrls));
 
@@ -246,18 +240,21 @@ public class MainActivity extends AppCompatActivity {
         });
 
         updateDownloadAPKButtonText();
+        // 如果从快捷方式启动，直接开始下载
+        if ("com.asfu222.bajpdl.SHORTCUT".equals(getIntent().getAction())) {
+            onGrantEscalatedPermission.push(this::startDownloads);
+        }
         if (!EscalatedFS.canReadWriteAndroidData()) {
             startDownloadButton.setEnabled(false);
             setupEscalatedPermissions();
         } else {
             updateConsole("已获取存储权限");
-            startDownloadButton.setEnabled(true);
+            updateEscalatedPermissions(true);
         }
 
         // 如果是从快捷方式启动，禁用更新后打开蔚蓝档案开关，并锁定开启该功能
-        if (getIntent().getAction().equals("com.asfu222.bajpdl.SHORTCUT")) {
+        if ("com.asfu222.bajpdl.SHORTCUT".equals(getIntent().getAction())) {
             openBA.setEnabled(false);
-
             gameFileManager.getAppConfig().setOpenBA(true);
             gameFileManager.getAppConfig().saveConfig();
         }
@@ -271,6 +268,18 @@ public class MainActivity extends AppCompatActivity {
                 installAPKButton.setText("安装游戏客户端");
             }
         });
+    }
+
+    private void updateEscalatedPermissions(boolean granted) {
+        if (granted) {
+            for (Runnable callback : onGrantEscalatedPermission) {
+                callback.run();
+            }
+            onGrantEscalatedPermission.clear();
+            startDownloadButton.setEnabled(true);
+        } else {
+            startDownloadButton.setEnabled(false);
+        }
     }
 
     public void openBlueArchive() {
@@ -469,6 +478,9 @@ public class MainActivity extends AppCompatActivity {
         if (gameFileManager.getAppConfig().shouldUseMITM()) {
             if (!isMITMAvailable()) {
                 updateConsole("请点击安装MITM服务");
+                if ("com.asfu222.bajpdl.SHORTCUT".equals(getIntent().getAction())) {
+                    installAPKButton.callOnClick();
+                }
             }
             else setupMITM();
             return;
@@ -490,7 +502,7 @@ public class MainActivity extends AppCompatActivity {
                 if (isRootAvailable()) {
                     updateConsole("检测到Root权限");
                     EscalatedFS.setRootAvailable(true);
-                    startDownloadButton.setEnabled(true);
+                    updateEscalatedPermissions(true);
                 }
             }
         } else {
@@ -502,7 +514,7 @@ public class MainActivity extends AppCompatActivity {
         try (var res = getContentResolver().query(Uri.parse("content://com.asfu222.bajpdl.mitm.fs"), null, null, null, null)) {
             updateConsole("检测到MITM权限");
             EscalatedFS.setContentProvider(new ContentProviderFS(getContentResolver()));
-            startDownloadButton.setEnabled(true);
+            updateEscalatedPermissions(true);
         }
     }
 
@@ -559,7 +571,6 @@ public class MainActivity extends AppCompatActivity {
                     (permissionResult == PackageManager.PERMISSION_GRANTED ? "已允许" : "未允许"));
 
             if (permissionResult == PackageManager.PERMISSION_GRANTED) {
-                startDownloadButton.setEnabled(true);
                 bindShizukuUserService();
             } else {
                 if (!permissionRequested) {
@@ -649,7 +660,7 @@ public class MainActivity extends AppCompatActivity {
             ShortcutInfo shortcutInfo = new ShortcutInfo.Builder(getApplicationContext(), "launch_game")
                     .setLongLabel("蔚蓝档案")
                     .setShortLabel("蔚蓝档案")
-                    .setIcon(Icon.createWithResource(getApplicationContext(),R.drawable.ba_icon))
+                  //  .setIcon(Icon.createWithResource(getApplicationContext(),R.drawable.ba_icon))
                     .setIntent(intent)
                     .build();
 

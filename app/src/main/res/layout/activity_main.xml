@@ -65,7 +65,15 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         android:layout_marginTop="8dp" />
-
+	<Button
+		android:id="@+id/createShortcutButton"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="添加桌面图标"
+		app:layout_constraintTop_toBottomOf="@id/openBASwitch"
+		app:layout_constraintEnd_toEndOf="parent"
+		android:layout_marginTop="16dp"
+		android:layout_marginEnd="8dp"/>
     <!-- Download and Replace Button -->
 	<Button
 		android:id="@+id/startDownloadButton"
@@ -91,16 +99,6 @@
 
 
     <!-- Horizontal Progress Bar -->
-
-	<Button
-		android:id="@+id/createShortcutButton"
-		android:layout_width="0dp"
-		android:layout_height="wrap_content"
-		android:layout_marginStart="32dp"
-		android:text="添加桌面图标"
-		app:layout_constraintBottom_toTopOf="@+id/batchSizeInput"
-		app:layout_constraintEnd_toEndOf="parent"
-		app:layout_constraintStart_toEndOf="@+id/openBASwitch" />
 
     <ProgressBar
         android:id="@+id/progressBar"
