@@ -22,6 +22,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -49,14 +50,14 @@ public class FileDownloader {
     }
 
     public CompletableFuture<Path> downloadFile(Path basePath, String relPath,
-                                                Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler, CommonCatalogItem item) {
+                                                Function<Path, Boolean> verifier, boolean replace, BiConsumer<String, Exception> handler, CommonCatalogItem item, AtomicLong downloadedSize) {
         return CompletableFuture.supplyAsync(() -> {
             int attempts = 5;
             int delay = 5000; // 5 seconds
             for (int i = 0; i < attempts; i++) {
                 Path result = null;
                 try {
-                    result = tryDownloadFromAllSources(basePath, relPath, verifier, replace, item);
+                    result = tryDownloadFromAllSources(basePath, relPath, verifier, replace, item, downloadedSize);
                 } catch (IOException e) {
                     handler.accept("Error downloading " + relPath, e);
                 }
@@ -75,7 +76,7 @@ public class FileDownloader {
     }
 
     private Path tryDownloadFromAllSources(Path basePath, String relPath,
-                                           Function<Path, Boolean> verifier, boolean replace, CommonCatalogItem item) throws IOException {
+                                           Function<Path, Boolean> verifier, boolean replace, CommonCatalogItem item, AtomicLong downloadedSize) throws IOException {
         List<String> serverUrls = appConfig.getServerUrls();
         StringBuilder crcLog = new StringBuilder();
         // Try primary servers first
@@ -87,11 +88,12 @@ public class FileDownloader {
                     downloadPath = FileUtils.getInGamePath(relPath).getParent().resolve(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), item.crc));
                 }
                 Path downloadedFile = downloadSingleFile(fileUrl,
-                        downloadPath, verifier, replace);
+                        downloadPath, verifier, replace, downloadedSize);
 
                 if (verifier.apply(downloadedFile)) {
                     return downloadedFile;
                 }
+                downloadedSize.addAndGet(-EscalatedFS.size(downloadedFile));
                 crcLog.append("网址 ").append(baseUrl).append("\n");
                 crcLog.append("预期CRC： ").append(item.crc).append("\n");
                 crcLog.append("收到CRC： ").append(FileUtils.calculateCRC32(downloadedFile)).append("\n");
@@ -109,11 +111,12 @@ public class FileDownloader {
             downloadPath = FileUtils.getInGamePath(relPath).getParent().resolve(FileUtils.renameToInGameFormat(downloadPath.getFileName().toString(), item.crc));
         }
         Path downloadedFile = downloadSingleFile(fallbackUrl,
-                downloadPath, verifier, replace);
+                downloadPath, verifier, replace, downloadedSize);
 
         if (verifier.apply(downloadedFile)) {
             return downloadedFile;
         }
+        downloadedSize.addAndGet(-EscalatedFS.size(downloadedFile));
         crcLog.append("网址 ").append(appConfig.getFallbackUrl()).append("\n");
         crcLog.append("预期CRC： ").append(item.crc).append("\n");
         crcLog.append("收到CRC： ").append(FileUtils.calculateCRC32(downloadedFile)).append("\n");
@@ -136,7 +139,7 @@ public class FileDownloader {
             for (int i = 0; i < attempts; i++) {
                 Path result = null;
                 try {
-                    result = downloadSingleFile(fileUrl, dest, verifier, replace);
+                    result = downloadSingleFile(fileUrl, dest, verifier, replace, new AtomicLong());
                 } catch (IOException e) {
                     handler.accept("从" + fileUrl + "下载时报错：" , e);
                 }
@@ -153,10 +156,11 @@ public class FileDownloader {
         }, executorService);
     }
 
-    private Path downloadSingleFile(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace) throws IOException {
+    private Path downloadSingleFile(String fileUrl, Path dest, Function<Path, Boolean> verifier, boolean replace, AtomicLong downloadedSize) throws IOException {
         // Check if file exists and is valid
         if (EscalatedFS.exists(dest)) {
             if (verifier.apply(dest) && !replace) {
+                downloadedSize.addAndGet(EscalatedFS.size(dest));
                 return dest; // File exists and is valid; return it.
             } else {
                 EscalatedFS.deleteIfExists(dest); // Delete file if it's invalid or replace is true.
@@ -191,6 +195,7 @@ public class FileDownloader {
                 int bytesRead;
                 while ((bytesRead = in.read(buffer)) != -1) {
                     out.write(buffer, 0, bytesRead);
+                    downloadedSize.addAndGet(bytesRead);
                 }
                 out.flush();
             }

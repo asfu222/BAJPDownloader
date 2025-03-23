@@ -1,6 +1,8 @@
 package com.asfu222.bajpdl.core;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 
 import com.asfu222.bajpdl.MainActivity;
 import com.asfu222.bajpdl.config.AppCache;
@@ -125,7 +127,7 @@ public class GameFileManager {
 
     public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
         return fileDownloader.downloadFile(dataPath, catalogEntry.getKey(),
-                catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError, catalogEntry.getValue()).thenCompose(downloadedFile -> {
+                catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError, catalogEntry.getValue(), downloadedSize).thenCompose(downloadedFile -> {
             if (downloadedFile == null) {
                 log("下载此文件失败: " + catalogEntry.getKey());
                 return CompletableFuture.completedFuture(false);
@@ -141,8 +143,8 @@ public class GameFileManager {
             }
 
             downloadedFiles.incrementAndGet();
-            downloadedSize.addAndGet(catalogEntry.getValue().size);
-            updateProgress();
+            //downloadedSize.addAndGet(catalogEntry.getValue().size);
+            //updateProgress();
             return CompletableFuture.completedFuture(true);
         });
     }
@@ -179,6 +181,17 @@ public class GameFileManager {
 
 
     private static boolean isDownloading = false;
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable progressRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (isDownloading) {
+                updateProgress();
+                handler.postDelayed(this, 500);
+            }
+        }
+    };
+
 
     public void startDownloads() {
         if (isDownloading) {
@@ -192,6 +205,8 @@ public class GameFileManager {
         totalSize.set(0);
         fileDownloader.updateThreadPool();
         isDownloading = true;
+        handler.post(progressRunnable);
+
         fileDownloader.fetchServerAvailable().thenRun(() -> {
             Set<String> availableCustomDownloads = fileDownloader.getAvailableCustomDownloads();
 
@@ -211,12 +226,13 @@ public class GameFileManager {
                             ((MainActivity) appContext).openBlueArchive();
                         }
                         isDownloading = false;
+                        handler.removeCallbacks(progressRunnable);
                     });
         });
     }
 
     private CompletableFuture<Boolean> downloadAndProcessCatalog(String catalogPath, Set<String> availableCustomDownloads) {
-        return fileDownloader.downloadFile(dataPath, catalogPath, path -> true, true, this::logError, CommonCatalogItem.EMPTY).thenCompose(path -> {
+        return fileDownloader.downloadFile(dataPath, catalogPath, path -> true, true, this::logError, CommonCatalogItem.EMPTY, new AtomicLong()).thenCompose(path -> {
             try {
                 log("已下载 " + catalogPath + ", 处理中...");
                 //long catalogCrc = FileUtils.calculateCRC32(path);
@@ -256,7 +272,7 @@ public class GameFileManager {
     }
 
     private CompletableFuture<Boolean> downloadAndCopyFile(String filePath) {
-        return fileDownloader.downloadFile(dataPath, filePath, path -> true, true, this::logError, CommonCatalogItem.EMPTY).thenCompose(path -> {
+        return fileDownloader.downloadFile(dataPath, filePath, path -> true, true, this::logError, CommonCatalogItem.EMPTY, new AtomicLong()).thenCompose(path -> {
             try {
                 FileUtils.copyToGame(path, filePath);
                 return CompletableFuture.completedFuture(true);
