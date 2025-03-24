@@ -141,6 +141,8 @@ public class MainActivity extends AppCompatActivity {
     private final AtomicReference<String> mUninstallPackage = new AtomicReference<>("");
     private final Stack<Consumer<Boolean>> uninstallCallbackStack = new Stack<>();
     private final Stack<Runnable> onGrantEscalatedPermission = new Stack<>();
+
+    private boolean isAuto = false;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -237,6 +239,33 @@ public class MainActivity extends AppCompatActivity {
                 })));
             }
         });
+        Button autoTutorialSwitch = findViewById(R.id.autoTutorialButton);
+        autoTutorialSwitch.setOnClickListener(v -> runOnUiThread(() ->
+                new AlertDialog.Builder(this)
+                .setTitle("自动教程")
+                .setMessage("自动教程已启用，点击确定后将自动下载游戏资源。\n⚠️注意：下载过程中不要退出本软件！\n⚠️自动教程将会使用MITM劫持方案，请允许所有卸载/安装⚠️")
+                .setPositiveButton("确定", (dialog, which) -> {
+                    downloadCustomOnlySwitch.setEnabled(false);
+                    openBA.setEnabled(false);
+                    useMITMSwitch.setEnabled(false);
+                    redownloadSwitch.setEnabled(false);
+                    if (gameFileManager.getAppConfig().shouldOpenBA()) {
+                    gameFileManager.getOnDownloadComplete().addFirst(() -> runOnUiThread(() -> new AlertDialog.Builder(this)
+                            .setTitle("自动教程")
+                            .setMessage("游戏资源下载完成，点击确定后将自动安装并打开蔚蓝档案。")
+                            .setCancelable(false)
+                            .setPositiveButton("确定", (dialog1, which1) -> openBlueArchive())
+                            .create().show()));
+                    }
+                    isAuto = true;
+                    onGrantEscalatedPermission.push(this::startDownloads);
+                    openBA.setChecked(true);
+                    downloadCustomOnlySwitch.setChecked(true);
+                    redownloadSwitch.setChecked(false);
+                    if (!useMITMSwitch.isChecked()) useMITMSwitch.setChecked(true);
+                    else setupEscalatedPermissions();
+                    })
+                        .setNegativeButton("取消", null).create().show()));
 
         updateDownloadAPKButtonText();
         // 如果从快捷方式启动，直接开始下载
@@ -477,7 +506,8 @@ public class MainActivity extends AppCompatActivity {
         if (gameFileManager.getAppConfig().shouldUseMITM()) {
             if (!isMITMAvailable()) {
                 updateConsole("请点击安装MITM服务");
-                if ("com.asfu222.bajpdl.SHORTCUT".equals(getIntent().getAction())) {
+                updateConsole(isAuto ? "自动安装中..." : "请点击安装按钮");
+                if (isAuto || "com.asfu222.bajpdl.SHORTCUT".equals(getIntent().getAction())) {
                     installAPKButton.callOnClick();
                 }
             }
@@ -614,8 +644,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void startDownloads() {
         if (!EscalatedFS.canReadWriteAndroidData()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isMITMAvailable() && !isRootAvailable() && !shizukuBinderReceived &&
-                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
+            if (!EscalatedFS.isReady()) {
                 updateConsole("错误：请先给与本软件Root或Shizuku或MITM权限。");
                 return;
             }
@@ -644,6 +673,10 @@ public class MainActivity extends AppCompatActivity {
         int batchSize = Math.max(Integer.parseInt(batchSizeInput.getText().toString()), 1);
         gameFileManager.getAppConfig().setConcurrentDownloads(batchSize);
         gameFileManager.getAppConfig().saveConfig();
+
+        if (!isAuto && gameFileManager.getAppConfig().shouldOpenBA()) {
+            gameFileManager.getOnDownloadComplete().addLast(this::openBlueArchive);
+        }
 
         gameFileManager.startDownloads();
     }

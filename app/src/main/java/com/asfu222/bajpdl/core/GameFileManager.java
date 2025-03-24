@@ -18,6 +18,8 @@ import org.json.JSONException;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -209,6 +211,12 @@ public class GameFileManager {
         }
     };
 
+    private final Deque<Runnable> onDownloadComplete = new ArrayDeque<>();
+
+    public Deque<Runnable> getOnDownloadComplete() {
+        return onDownloadComplete;
+    }
+
 
     public void startDownloads() {
         if (isDownloading) {
@@ -242,9 +250,10 @@ public class GameFileManager {
                         isDownloading = false;
                         updateProgress();
                         handler.removeCallbacks(mainProgressRunnable);
-                        if (appConfig.shouldOpenBA()) {
-                            ((MainActivity) appContext).openBlueArchive();
+                        for (Runnable runnable : onDownloadComplete) {
+                            runnable.run();
                         }
+                        onDownloadComplete.clear();
                     });
         });
     }

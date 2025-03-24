@@ -42,6 +42,10 @@ public abstract class EscalatedFS {
         contentProviderFS = provider;
     }
 
+    public static boolean isReady() {
+        return rootAvailable || shizukuService != null || contentProviderFS != null;
+    }
+
     private static boolean needsEscalation(Path path) {
         return path.toString().contains("/Android/data/com.YostarJP.BlueArchive/files") && !canReadWriteAndroidData();
     }

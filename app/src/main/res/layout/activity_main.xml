@@ -75,6 +75,15 @@
 		app:layout_constraintEnd_toEndOf="parent"
 		android:layout_marginTop="16dp"
 		android:layout_marginEnd="8dp"/>
+	<Button
+		android:id="@+id/autoTutorialButton"
+		android:layout_width="wrap_content"
+		android:layout_height="wrap_content"
+		android:text="我什么也不懂，请帮我自动使用"
+		app:layout_constraintBottom_toBottomOf="parent"
+		app:layout_constraintEnd_toEndOf="parent"
+		android:layout_marginBottom="16dp"
+		android:layout_marginEnd="16dp"/>
     <!-- Download and Replace Button -->
 	<Button
 		android:id="@+id/startDownloadButton"
