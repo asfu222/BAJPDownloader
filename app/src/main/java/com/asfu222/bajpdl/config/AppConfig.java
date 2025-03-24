@@ -30,7 +30,7 @@ public class AppConfig {
     private List<String> serverUrls;
     private final Context context;
     private String fallbackUrl;
-    private int concurrentDownloads = 20;
+    private int concurrentDownloads = 5;
 
     public AppConfig(Context context, BiConsumer<String, Exception> handler) {
         this.context = context;
@@ -103,7 +103,7 @@ public class AppConfig {
                 alwaysRedownload = json.optBoolean("replaceDownloadedFiles", false);
                 downloadCustomOnly = json.optBoolean("downloadCustomOnly", true);
                 JSONArray urlsArray = json.getJSONArray("serverUrls");
-                concurrentDownloads = json.optInt("concurrentDownloads", 20);
+                concurrentDownloads = Math.min(json.optInt("concurrentDownloads", 5), 5);
                 openBA = json.optBoolean("openBA", true);
                 useMITM = json.optBoolean("useMITM", false);
                 serverUrls = new ArrayList<>();
