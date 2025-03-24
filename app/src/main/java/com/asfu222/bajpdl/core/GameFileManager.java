@@ -61,8 +61,10 @@ public class GameFileManager {
         final Runnable progressRunnable = new Runnable() {
             @Override
             public void run() {
-                ((MainActivity) appContext).updateProgress(dlFiles.get(), 2, (long)(dlSize.get() / BYTES_TO_MB));
-                handler.postDelayed(this, 500);
+                if (isDownloading) {
+                    ((MainActivity) appContext).updateProgress(dlFiles.get(), 2, (long) (dlSize.get() / BYTES_TO_MB));
+                    handler.postDelayed(this, 500);
+                }
             }
         };
         return CompletableFuture.supplyAsync(() -> {
@@ -111,6 +113,7 @@ public class GameFileManager {
                     });
         }).thenCompose(unchangedArray -> {
             Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
+            isDownloading = true;
             handler.post(progressRunnable);
             CompletableFuture<Path> apk1Future;
             if (unchangedArray[0]) {
@@ -132,8 +135,9 @@ public class GameFileManager {
             }
             apk2Future.thenRun(dlFiles::incrementAndGet);
             return CompletableFuture.allOf(apk1Future, apk2Future).thenRun(() -> {
-                ((MainActivity) appContext).updateProgress(dlFiles.get(), 2, (long)(dlSize.get() / BYTES_TO_MB));
+                isDownloading = false;
                 handler.removeCallbacks(progressRunnable);
+                ((MainActivity) appContext).updateProgress(2, 2, (long)(dlSize.get() / BYTES_TO_MB));
             });
         });
     }
@@ -195,7 +199,7 @@ public class GameFileManager {
 
     private static boolean isDownloading = false;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Runnable progressRunnable = new Runnable() {
+    private final Runnable mainProgressRunnable = new Runnable() {
         @Override
         public void run() {
             if (isDownloading) {
@@ -218,7 +222,7 @@ public class GameFileManager {
         totalSize.set(0);
         fileDownloader.updateThreadPool();
         isDownloading = true;
-        handler.post(progressRunnable);
+        handler.post(mainProgressRunnable);
 
         fileDownloader.fetchServerAvailable().thenRun(() -> {
             Set<String> availableCustomDownloads = fileDownloader.getAvailableCustomDownloads();
@@ -235,12 +239,12 @@ public class GameFileManager {
             CompletableFuture.allOf(catalogFutures.toArray(new CompletableFuture[0]))
                     .thenAccept(v -> {
                         log("已完成更新");
+                        isDownloading = false;
+                        updateProgress();
+                        handler.removeCallbacks(mainProgressRunnable);
                         if (appConfig.shouldOpenBA()) {
                             ((MainActivity) appContext).openBlueArchive();
                         }
-                        isDownloading = false;
-                        updateProgress();
-                        handler.removeCallbacks(progressRunnable);
                     });
         });
     }
