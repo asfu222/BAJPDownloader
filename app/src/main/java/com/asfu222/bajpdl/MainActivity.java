@@ -11,7 +11,6 @@ import android.content.pm.Signature;
 import android.net.Uri;
 import android.content.pm.ShortcutInfo;
 import android.content.pm.ShortcutManager;
-import android.graphics.drawable.Icon;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Environment;
@@ -500,7 +499,7 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 updateConsole("Shizuku服务未运行");
                 if (isRootAvailable()) {
-                    updateConsole("检测到Root权限");
+                    updateConsole("检测到Root权限。下载器将使用此权限，⚠️不隐藏Root游戏客户端将无法使用，非法应用闪退跟本软件无关⚠️");
                     EscalatedFS.setRootAvailable(true);
                     updateEscalatedPermissions(true);
                 }
