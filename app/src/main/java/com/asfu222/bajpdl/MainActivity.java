@@ -615,8 +615,8 @@ public class MainActivity extends AppCompatActivity {
 
     private void startDownloads() {
         if (!EscalatedFS.canReadWriteAndroidData()) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isRootAvailable() && !shizukuBinderReceived &&
-                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED && !isMITMAvailable()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !isMITMAvailable() && !isRootAvailable() && !shizukuBinderReceived &&
+                    Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED) {
                 updateConsole("错误：请先给与本软件Root或Shizuku或MITM权限。");
                 return;
             }
