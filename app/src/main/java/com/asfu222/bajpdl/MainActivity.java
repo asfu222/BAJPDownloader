@@ -52,6 +52,8 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Stack;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -540,10 +542,24 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupMITM() {
-        try (var res = getContentResolver().query(Uri.parse("content://com.asfu222.bajpdl.mitm.fs"), null, null, null, null)) {
+        CountDownLatch latch = new CountDownLatch(1);
+        new Thread(() -> {
+            while (!isMITMAvailable()) {
+                try {
+                    latch.await(100, TimeUnit.MILLISECONDS);
+                } catch (InterruptedException e) {
+                    logErrorToConsole("等待MITM服务安装时报错", e);
+                }
+            }
+            latch.countDown();
+        }).start();
+        try {
+            latch.await();
             updateConsole("检测到MITM权限");
             EscalatedFS.setContentProvider(new ContentProviderFS(getContentResolver()));
             updateEscalatedPermissions(true);
+        } catch (InterruptedException e) {
+            logErrorToConsole("等待MITM服务安装时报错", e);
         }
     }
 
