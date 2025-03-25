@@ -56,7 +56,7 @@ android {
     flavorDimensions("version")
  
      productFlavors {
-         create("release") {
+         create("main") {
              dimension = "version"
              applicationId = "com.asfu222.bajpdl"
              // Apply signing config for this flavor
