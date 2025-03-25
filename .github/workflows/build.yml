@@ -41,19 +41,19 @@ jobs:
       - name: Build Signed Release APKs
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > keystore.jks
-          ./gradlew :app:assembleMain :app:assembleMitm :mitmserver:assembleRelease
+          ./gradlew :app:assembleMainBuild :app:assembleMitmBuild :mitmserver:assembleRelease
       - name: Get Short Commit Hash
         run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Rename and Upload Main Build Release APK
-        run: mv app/build/outputs/apk/release/app-main-release.apk app/build/outputs/apk/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
+        run: mv app/build/outputs/apk/mainBuild/release/app-main-release.apk app/build/outputs/apk/mainBuild/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
       - name: Upload Main Build Release APK
         uses: actions/upload-artifact@v4
         with:
           name: BAJPDownloader-main-release-${{ env.COMMIT_HASH }}
-          path: app/build/outputs/apk/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
+          path: app/build/outputs/apk/mainBuild/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
       - name: Rename and Upload Main Build MITM APK
-        run: mv app/build/outputs/apk/release/app-mitm-release.apk BAJPDownloader-MITM.apk
+        run: mv app/build/outputs/apk/mitmBuild/release/app-mitmBuild-release.apk BAJPDownloader-MITM.apk
 
       - name: Rename and Upload MITM Server APK
         run: mv mitmserver/build/outputs/apk/release/mitmserver-release.apk mitmserver.apk
