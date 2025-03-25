@@ -21,4 +21,3 @@ dependencyResolutionManagement {
 
 rootProject.name = "BAJPDownloader"
 include(":app")
-include(":mitmserver")
