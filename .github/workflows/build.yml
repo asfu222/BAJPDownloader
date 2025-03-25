@@ -41,17 +41,19 @@ jobs:
       - name: Build Signed Release APKs
         run: |
           echo "${{ secrets.KEYSTORE_FILE }}" | base64 --decode > keystore.jks
-          ./gradlew assembleRelease
+          ./gradlew assembleRelease :app:assembleMitm
       - name: Get Short Commit Hash
         run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Rename and Upload Main Build Release APK
-        run: mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
+        run: mv app/build/outputs/apk/release/app-release-release.apk app/build/outputs/apk/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
       - name: Upload Main Build Release APK
         uses: actions/upload-artifact@v4
         with:
           name: BAJPDownloader-main-release-${{ env.COMMIT_HASH }}
           path: app/build/outputs/apk/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
+      - name: Rename and Upload Main Build MITM APK
+        run: mv app/build/outputs/apk/release/app-mitm-release.apk BAJPDownloader-MITM.apk
 
       - name: Rename and Upload MITM Server APK
         run: mv mitmserver/build/outputs/apk/release/mitmserver-release.apk mitmserver.apk
@@ -66,6 +68,7 @@ jobs:
          aws s3 cp mitmserver.apk s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk --checksum-algorithm CRC32
          sha256sum mitmserver.apk | awk '{print $1}' > mitmserver.apk.hash
          aws s3 cp mitmserver.apk.hash s3://${{ secrets.R2_BUCKET }}/apk/mitmserver.apk.hash --checksum-algorithm CRC32
+         aws s3 cp BAJPDownloader-MITM.apk s3://${{ secrets.R2_BUCKET }}/apk/BAJPDownloader-MITM.apk --checksum-algorithm CRC32
       - name: Purge Cloudflare Cache
         run: |
           curl -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE_ID }}/purge_cache" \
