@@ -161,7 +161,6 @@ public class MainActivity extends AppCompatActivity {
         progressText = findViewById(R.id.progressText);
         consoleScrollView = findViewById(R.id.consoleScrollView);
         consoleOutput = findViewById(R.id.consoleOutput);
-
         gameFileManager = new GameFileManager(this);
         List<String> defaultServerUrls = gameFileManager.getAppConfig().getServerUrls();
         serverUrlsInput.setText(String.join(",", defaultServerUrls));
@@ -661,42 +660,46 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startDownloads() {
-        if (!EscalatedFS.canReadWriteAndroidData()) {
-            if (!EscalatedFS.isReady()) {
-                updateConsole("错误：请先给与本软件Root或Shizuku或MITM权限。");
-                return;
-            }
-            try {
-                if (!EscalatedFS.exists(Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/"))) {
-                    if (!isMITMAvailable()) {
-                        updateConsole("错误：请先打开蔚蓝档案并等待加载完成");
-                        return;
-                    }
-                    EscalatedFS.createDirectories(Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/"));
+        try {
+            if (!EscalatedFS.canReadWriteAndroidData()) {
+                if (!EscalatedFS.isReady()) {
+                    updateConsole("错误：请先给与本软件Root或Shizuku或MITM权限。");
+                    return;
                 }
-            } catch (IOException e) {
-                logErrorToConsole("检测蔚蓝档案安装状态时报错", e);
-                return;
+                try {
+                    if (!EscalatedFS.exists(Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/"))) {
+                        if (!isMITMAvailable()) {
+                            updateConsole("错误：请先打开蔚蓝档案并等待加载完成");
+                            return;
+                        }
+                        EscalatedFS.createDirectories(Environment.getExternalStorageDirectory().toPath().resolve("Android/data/com.YostarJP.BlueArchive/files/"));
+                    }
+                } catch (IOException e) {
+                    logErrorToConsole("检测蔚蓝档案安装状态时报错", e);
+                    return;
+                }
             }
+            progressBar.setVisibility(View.VISIBLE);
+            progressText.setVisibility(View.VISIBLE);
+            progressBar.setProgress(0);
+            progressText.setText("进度: 0%");
+            consoleOutput.setText("");
+
+            String serverUrlsText = serverUrlsInput.getText().toString();
+            List<String> serverUrls = Arrays.asList(serverUrlsText.split(","));
+            gameFileManager.getAppConfig().setServerUrls(serverUrls);
+            int batchSize = Math.max(Integer.parseInt(batchSizeInput.getText().toString()), 1);
+            gameFileManager.getAppConfig().setConcurrentDownloads(batchSize);
+            gameFileManager.getAppConfig().saveConfig();
+
+            if (!isAuto && gameFileManager.getAppConfig().shouldOpenBA()) {
+                gameFileManager.getOnDownloadComplete().addLast(this::openBlueArchive);
+            }
+
+            gameFileManager.startDownloads();
+        } catch (Exception e) {
+            logErrorToConsole("开始下载时报错", e);
         }
-        progressBar.setVisibility(View.VISIBLE);
-        progressText.setVisibility(View.VISIBLE);
-        progressBar.setProgress(0);
-        progressText.setText("进度: 0%");
-        consoleOutput.setText("");
-
-        String serverUrlsText = serverUrlsInput.getText().toString();
-        List<String> serverUrls = Arrays.asList(serverUrlsText.split(","));
-        gameFileManager.getAppConfig().setServerUrls(serverUrls);
-        int batchSize = Math.max(Integer.parseInt(batchSizeInput.getText().toString()), 1);
-        gameFileManager.getAppConfig().setConcurrentDownloads(batchSize);
-        gameFileManager.getAppConfig().saveConfig();
-
-        if (!isAuto && gameFileManager.getAppConfig().shouldOpenBA()) {
-            gameFileManager.getOnDownloadComplete().addLast(this::openBlueArchive);
-        }
-
-        gameFileManager.startDownloads();
     }
 
     private void onCreateShortcutButtonPressed() {
@@ -746,7 +749,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    public void logErrorToConsole(String message, Exception ex) {
+    public void logErrorToConsole(String message, Throwable ex) {
         StringWriter sw = new StringWriter();
         ex.printStackTrace(new PrintWriter(sw));
         updateConsole(message + ": " + sw);
