@@ -193,6 +193,10 @@ public class MainActivity extends AppCompatActivity {
             setupEscalatedPermissions();
             updateDownloadAPKButtonText();
         }));
+        if (EscalatedFS.canReadWriteAndroidData()) {
+            useMITMSwitch.setEnabled(false);
+            updateConsole("检测到存储权限，MITM方案已禁用（无需使用）");
+        }
 
         serverUrlsInput.setOnEditorActionListener((v, actionId, event) -> {
             if (actionId == EditorInfo.IME_ACTION_DONE) {
@@ -259,12 +263,16 @@ public class MainActivity extends AppCompatActivity {
                             .create().show()));
                     }
                     isAuto = true;
-                    onGrantEscalatedPermission.push(this::startDownloads);
                     openBA.setChecked(true);
                     downloadCustomOnlySwitch.setChecked(true);
-                    redownloadSwitch.setChecked(false);
-                    if (!useMITMSwitch.isChecked()) useMITMSwitch.setChecked(true);
-                    else setupEscalatedPermissions();
+                    if (!EscalatedFS.canReadWriteAndroidData()) {
+                        onGrantEscalatedPermission.push(this::startDownloads);
+                        redownloadSwitch.setChecked(false);
+                        if (!useMITMSwitch.isChecked()) useMITMSwitch.setChecked(true);
+                        else setupEscalatedPermissions();
+                    } else {
+                        startDownloads();
+                    }
                     })
                         .setNegativeButton("取消", null).create().show()));
 
