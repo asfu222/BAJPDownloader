@@ -1,7 +1,15 @@
+import java.net.URI
+import java.util.Properties
+import java.io.StringReader
+import java.util.Base64
 plugins {
     alias(libs.plugins.android.application)
 }
-
+val envUrl = "https://raw.githubusercontent.com/asfu222/BACNLocalizationResources/refs/heads/main/ba.env"
+ val envText = URI.create(envUrl).toURL().readText(Charsets.UTF_8)
+ val envProps = Properties().apply {
+     load(StringReader(envText))
+ }
 android {
     namespace = "com.asfu222.bajpdl"
     compileSdk = 35
