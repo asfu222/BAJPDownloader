@@ -555,9 +555,11 @@ public class MainActivity extends AppCompatActivity {
         }).start();
         try {
             latch.await();
-            updateConsole("检测到MITM权限");
-            EscalatedFS.setContentProvider(new ContentProviderFS(getContentResolver()));
-            updateEscalatedPermissions(true);
+            try (var res = getContentResolver().query(Uri.parse("content://com.asfu222.bajpdl.mitm.fs"), null, null, null, null)) {
+                updateConsole("检测到MITM权限");
+                EscalatedFS.setContentProvider(new ContentProviderFS(getContentResolver()));
+                updateEscalatedPermissions(true);
+            }
         } catch (InterruptedException e) {
             logErrorToConsole("等待MITM服务安装时报错", e);
         }
