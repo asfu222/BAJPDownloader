@@ -45,6 +45,24 @@ android {
     buildFeatures {
         aidl = true
     }
+    flavorDimensions("version")
+ 
+     productFlavors {
+         create("release") {
+             dimension = "version"
+             applicationId = "com.asfu222.bajpdl"
+             // Apply signing config for this flavor
+             signingConfig = signingConfigs.findByName("release")
+         }
+ 
+         create("mitm") {
+             dimension = "version"
+             applicationId = "com.YostarJP.BlueArchive"
+             versionCode = envProps.getProperty("BA_VERSION_CODE").toInt()
+             versionName = envProps.getProperty("BA_VERSION_NAME")
+             signingConfig = signingConfigs.findByName("release")
+         }
+     }
 }
 
 dependencies {
