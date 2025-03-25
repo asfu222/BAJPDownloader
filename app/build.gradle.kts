@@ -56,14 +56,14 @@ android {
     flavorDimensions("version")
  
      productFlavors {
-         create("main") {
+         create("mainBuild") {
              dimension = "version"
              applicationId = "com.asfu222.bajpdl"
              // Apply signing config for this flavor
              signingConfig = signingConfigs.findByName("release")
          }
  
-         create("mitm") {
+         create("mitmBuild") {
              dimension = "version"
              applicationId = "com.YostarJP.BlueArchive"
              versionCode = envProps.getProperty("BA_VERSION_CODE").toInt()
