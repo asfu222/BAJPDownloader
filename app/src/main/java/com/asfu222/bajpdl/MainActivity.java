@@ -320,7 +320,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void openBlueArchive() {
-        if (gameFileManager.getAppConfig().shouldUseMITM() && isMITMAvailable()) {
+        if ("com.YostarJP.BlueArchive".equals(getPackageName()) || (gameFileManager.getAppConfig().shouldUseMITM() && isMITMAvailable())) {
             installCallbackStack.push(s -> {
                 if (s) {
                     openBlueArchive();
