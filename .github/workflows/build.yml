@@ -46,7 +46,7 @@ jobs:
         run: echo "COMMIT_HASH=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Rename and Upload Main Build Release APK
-        run: mv app/build/outputs/apk/mainBuild/release/app-main-release.apk app/build/outputs/apk/mainBuild/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
+        run: mv app/build/outputs/apk/mainBuild/release/app-mainBuild-release.apk app/build/outputs/apk/mainBuild/release/BAJPDownloader-main-${{ env.COMMIT_HASH }}.apk
       - name: Upload Main Build Release APK
         uses: actions/upload-artifact@v4
         with:
