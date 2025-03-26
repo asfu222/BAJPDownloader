@@ -222,26 +222,21 @@ public class MainActivity extends AppCompatActivity {
             if (gameFileManager.getAppConfig().shouldUseMITM()) {
                 gameFileManager.downloadSingleAPK("https://cdn.bluearchive.me/apk/BAJPDownloader-MITM.apk").thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("BAJPDownloader-MITM.apk", result -> {
                     if (!result) {
-                        try {
-                            Thread.sleep(1000);
-                        } catch (InterruptedException ignored) {}
-                    }
-                    updateConsole("安装MITM版下载器成功");
-                    try {
-                        for (int i = 0; i < 20; i++) {
-                            if (isAuto) {
-                                Intent intent = new Intent();
-                                intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", MainActivity.class.getName()));
-                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                intent.setAction("com.asfu222.bajpdl.SHORTCUT");
-                                try {
-                                    startActivity(intent);
-                                    mIsAutoComplete.set(true);
-                                } catch (ActivityNotFoundException ignored) {}
+                        updateConsole("安装MITM版下载器失败（或为第一次安装，可以不管这个提示）");
+                    } else {
+                        updateConsole("安装MITM版下载器成功");
+                        if (isAuto) {
+                            Intent intent = new Intent();
+                            intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", MainActivity.class.getName()));
+                            intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                            intent.setAction("com.asfu222.bajpdl.SHORTCUT");
+                            try {
+                                startActivity(intent);
+                                mIsAutoComplete.set(true);
+                            } catch (ActivityNotFoundException ignored) {
                             }
-                            Thread.sleep(250);
                         }
-                    } catch (InterruptedException ignored) {}
+                    }
                 })));
             } else {
                 gameFileManager.downloadSingleAPK("https://cdn.bluearchive.me/apk/蔚蓝档案.apk").thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("蔚蓝档案.apk", result -> {
@@ -264,6 +259,7 @@ public class MainActivity extends AppCompatActivity {
                     openBA.setEnabled(false);
                     useMITMSwitch.setEnabled(false);
                     redownloadSwitch.setEnabled(false);
+                    openBA.setChecked(true);
                     if (gameFileManager.getAppConfig().shouldOpenBA()) {
                     gameFileManager.getOnDownloadComplete().addFirst(() -> runOnUiThread(() -> new AlertDialog.Builder(this)
                             .setTitle("自动教程")
@@ -273,7 +269,6 @@ public class MainActivity extends AppCompatActivity {
                             .create().show()));
                     }
                     isAuto = true;
-                    openBA.setChecked(true);
                     downloadCustomOnlySwitch.setChecked(true);
                     if (!EscalatedFS.canReadWriteAndroidData()) {
                         redownloadSwitch.setChecked(false);
