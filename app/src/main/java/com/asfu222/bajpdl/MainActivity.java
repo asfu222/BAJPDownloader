@@ -51,6 +51,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Stack;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -137,15 +138,12 @@ public class MainActivity extends AppCompatActivity {
     private final AtomicReference<String> mUninstallPackage = new AtomicReference<>("");
     private final Stack<Consumer<Boolean>> uninstallCallbackStack = new Stack<>();
     private final Stack<Runnable> onGrantEscalatedPermission = new Stack<>();
+    private final AtomicBoolean mIsAutoComplete = new AtomicBoolean(false);
 
     private boolean isAuto = false;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        if ("com.asfu222.bajpdl.OPEN_BA".equals(getIntent().getAction())) {
-            openBlueArchive();
-            return;
-        }
         setContentView(R.layout.activity_main);
         serverUrlsInput = findViewById(R.id.serverUrlsInput);
         Switch redownloadSwitch = findViewById(R.id.redownloadSwitch);
@@ -223,25 +221,27 @@ public class MainActivity extends AppCompatActivity {
             updateConsole("正在获取APK，请稍等...");
             if (gameFileManager.getAppConfig().shouldUseMITM()) {
                 gameFileManager.downloadSingleAPK("https://cdn.bluearchive.me/apk/BAJPDownloader-MITM.apk").thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("BAJPDownloader-MITM.apk", result -> {
-                    if (result) {
-                        updateConsole("安装MITM版下载器成功");
+                    if (!result) {
                         try {
-                            for (int i = 0; i < 5; i++) {
-                                if (isAuto) {
-                                    Intent intent = new Intent();
-                                    intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", MainActivity.class.getName()));
-                                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                                    intent.setAction("com.asfu222.bajpdl.SHORTCUT");
-                                    try {
-                                        startActivity(intent);
-                                    } catch (ActivityNotFoundException ignored) {}
-                                }
-                                Thread.sleep(250);
-                            }
+                            Thread.sleep(1000);
                         } catch (InterruptedException ignored) {}
-                    } else {
-                        updateConsole("安装MITM版下载器失败");
                     }
+                    updateConsole("安装MITM版下载器成功");
+                    try {
+                        for (int i = 0; i < 20; i++) {
+                            if (isAuto) {
+                                Intent intent = new Intent();
+                                intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", MainActivity.class.getName()));
+                                intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                intent.setAction("com.asfu222.bajpdl.SHORTCUT");
+                                try {
+                                    startActivity(intent);
+                                    mIsAutoComplete.set(true);
+                                } catch (ActivityNotFoundException ignored) {}
+                            }
+                            Thread.sleep(250);
+                        }
+                    } catch (InterruptedException ignored) {}
                 })));
             } else {
                 gameFileManager.downloadSingleAPK("https://cdn.bluearchive.me/apk/蔚蓝档案.apk").thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("蔚蓝档案.apk", result -> {
@@ -339,12 +339,7 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         Intent intent = new Intent();
-        if ("com.asfu222.bajpdl".equals(getPackageName())) {
-            intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", "com.yostarjp.bluearchive.MxUnityPlayerActivity"));
-        } else {
-            intent.setComponent(new ComponentName("com.asfu222.bajpdl", "com.asfu222.bajpdl.MainActivity"));
-            intent.setAction("com.asfu222.bajpdl.OPEN_BA");
-        }
+        intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", "com.yostarjp.bluearchive.MxUnityPlayerActivity"));
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
         System.runFinalization();
@@ -462,6 +457,11 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onResume() {
+        if (mIsAutoComplete.get()) {
+            mIsAutoComplete.set(false);
+            openBlueArchive();
+            return;
+        }
         if (!mInstallPackage.get().isEmpty()) {
             PackageManager pm = getPackageManager();
             try {
