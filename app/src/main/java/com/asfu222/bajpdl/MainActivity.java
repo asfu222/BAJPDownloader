@@ -330,11 +330,6 @@ public class MainActivity extends AppCompatActivity {
 
     public void openBlueArchive() {
         if ("com.YostarJP.BlueArchive".equals(getPackageName())) {
-            installCallbackStack.push(s -> {
-                if (s) {
-                    openBlueArchive();
-                }
-            });
             installAPKButton.callOnClick();
             return;
         }
