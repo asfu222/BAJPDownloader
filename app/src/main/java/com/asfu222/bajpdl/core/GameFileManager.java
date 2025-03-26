@@ -57,93 +57,38 @@ public class GameFileManager {
         return appCache;
     }
 
-    public CompletableFuture<Void> downloadServerAPKs() {
-        final AtomicInteger dlFiles = new AtomicInteger(0);
-        final AtomicLong dlSize = new AtomicLong();
-        final Runnable progressRunnable = new Runnable() {
-            @Override
-            public void run() {
-                if (isDownloading) {
-                    ((MainActivity) appContext).updateProgress(dlFiles.get(), 2, (long) (dlSize.get() / BYTES_TO_MB));
-                    handler.postDelayed(this, 500);
-                }
-            }
-        };
-        return CompletableFuture.supplyAsync(() -> {
+    public CompletableFuture<Path> downloadSingleAPK(String apkUrl) {
+        downloadedFiles.set(0);
+        totalFiles.set(1);
+        downloadedSize.set(0);
+        totalSize.set(0);
+        isDownloading = true;
+        handler.post(mainProgressRunnable);
+        Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
+        String apkFileName = apkUrl.substring(apkUrl.lastIndexOf('/') + 1);
+        log("开始下载APK文件: " + apkUrl);
+        log(apkFileName);
+        return fileDownloader.downloadAsync(apkUrl + ".hash", cachePath.resolve(apkFileName + ".hash"), path -> true, true, this::logError, new AtomicLong()).thenCompose(hashPath -> {
             try {
-                Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
-
-                // Read existing hashes (if present)
-                Path hash1Path = cachePath.resolve("蔚蓝档案.apk.hash");
-                Path hash2Path = cachePath.resolve("mitmserver.apk.hash");
-
-                String hash1 = EscalatedFS.exists(hash1Path) ? new String(EscalatedFS.readAllBytes(hash1Path), StandardCharsets.UTF_8) : null;
-                String hash2 = EscalatedFS.exists(hash2Path) ? new String(EscalatedFS.readAllBytes(hash2Path), StandardCharsets.UTF_8) : null;
-
-                return new String[]{hash1, hash2};
+                String[] hash_info = new String(EscalatedFS.readAllBytes(hashPath), StandardCharsets.UTF_8).trim().split(" ");
+                long crc = Long.parseLong(hash_info[0]);
+                long size = Long.parseLong(hash_info[1]);
+                CommonCatalogItem item = new CommonCatalogItem(apkFileName, size, crc, false);
+                totalSize.set(size);
+                return fileDownloader.downloadAsync(apkUrl, cachePath.resolve(apkFileName), item::verifyIntegrity, false, this::logError, downloadedSize)
+                        .thenApply(p -> {
+                            isDownloading = false;
+                            handler.removeCallbacks(mainProgressRunnable);
+                            downloadedFiles.set(1);
+                            updateProgress();
+                            return p;
+                        });
             } catch (IOException e) {
-                logError("读取本地APK的哈希值时报错", e);
-                return new String[]{null, null};
+                logError("读取APK哈希值时报错", e);
+                return CompletableFuture.completedFuture(null);
             }
-        }).thenCompose(hashes -> {
-            Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
-            Path hash1Path = cachePath.resolve("蔚蓝档案.apk.hash");
-            Path hash2Path = cachePath.resolve("mitmserver.apk.hash");
-
-            CompletableFuture<Path> hashDownload1 = fileDownloader.downloadAsync(
-                    "https://cdn.bluearchive.me/apk/蔚蓝档案.apk.hash",
-                    hash1Path, path -> true, true, this::logError, new AtomicLong());
-
-            CompletableFuture<Path> hashDownload2 = fileDownloader.downloadAsync(
-                    "https://cdn.bluearchive.me/apk/mitmserver.apk.hash",
-                    hash2Path, path -> true, true, this::logError, new AtomicLong());
-
-            return CompletableFuture.allOf(hashDownload1, hashDownload2)
-                    .thenApply(ignored -> {
-                        try {
-                            // Read the newly downloaded hashes
-                            String newHash1 = new String(EscalatedFS.readAllBytes(hash1Path), StandardCharsets.UTF_8);
-                            String newHash2 = new String(EscalatedFS.readAllBytes(hash2Path), StandardCharsets.UTF_8);
-
-                            boolean apk1Unchanged = hashes[0] != null && hashes[0].equals(newHash1);
-                            boolean apk2Unchanged = hashes[1] != null && hashes[1].equals(newHash2);
-                            return new boolean[]{apk1Unchanged, apk2Unchanged};
-                        } catch (IOException e) {
-                            logError("读取服务器APK的哈希值时报错", e);
-                            return new boolean[]{false, false};
-                        }
-                    });
-        }).thenCompose(unchangedArray -> {
-            Path cachePath = appContext.getExternalFilesDir("bajpdl_cache").toPath();
-            isDownloading = true;
-            handler.post(progressRunnable);
-            CompletableFuture<Path> apk1Future;
-            if (unchangedArray[0]) {
-                apk1Future = CompletableFuture.completedFuture(null);
-            } else {
-                apk1Future = fileDownloader.downloadAsync(
-                        "https://cdn.bluearchive.me/apk/蔚蓝档案.apk",
-                        cachePath.resolve("蔚蓝档案.apk"), path -> true, true, this::logError, dlSize);
-            }
-            apk1Future.thenRun(dlFiles::incrementAndGet);
-
-            CompletableFuture<Path> apk2Future;
-            if (unchangedArray[1]) {
-                apk2Future = CompletableFuture.completedFuture(null);
-            } else {
-                apk2Future = fileDownloader.downloadAsync(
-                        "https://cdn.bluearchive.me/apk/mitmserver.apk",
-                        cachePath.resolve("mitmserver.apk"), path -> true, true, this::logError, dlSize);
-            }
-            apk2Future.thenRun(dlFiles::incrementAndGet);
-            return CompletableFuture.allOf(apk1Future, apk2Future).thenRun(() -> {
-                isDownloading = false;
-                handler.removeCallbacks(progressRunnable);
-                ((MainActivity) appContext).updateProgress(2, 2, (long)(dlSize.get() / BYTES_TO_MB));
-            });
         });
     }
-
     public CompletableFuture<Boolean> processFile(Map.Entry<String, CommonCatalogItem> catalogEntry) {
         return fileDownloader.downloadFile(dataPath, catalogEntry.getKey(),
                 catalogEntry.getValue()::verifyIntegrity, appConfig.shouldAlwaysRedownload(), this::logError, catalogEntry.getValue(), downloadedSize).thenCompose(downloadedFile -> {
