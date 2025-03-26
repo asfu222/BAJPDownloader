@@ -457,6 +457,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onResume() {
+        super.onResume();
         if (mIsAutoComplete.get()) {
             mIsAutoComplete.set(false);
             openBlueArchive();
@@ -522,7 +523,6 @@ public class MainActivity extends AppCompatActivity {
             mUninstallPackage.set("");
             uninstallCallbackStack.clear();
         }
-        super.onResume();
     }
 
     private void setupEscalatedPermissions() {
