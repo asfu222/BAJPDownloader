@@ -62,7 +62,7 @@ jobs:
           AWS_ENDPOINT_URL: ${{ secrets.R2_ENDPOINT }}
           AWS_MAX_ATTEMPTS: 5
         run: |
-         cksum BAJPDownloader-MITM.apk | awk '{print $1, $2}' > BAJPDownloader-MITM.apk.hash
+         python3 -c "import zlib; f = open('BAJPDownloader-MITM.apk','rb'); data = f.read(); f.close(); print((zlib.crc32(data) & 0xffffffff), len(data))" > BAJPDownloader-MITM.apk.hash
          aws s3 cp BAJPDownloader-MITM.apk.hash s3://${{ secrets.R2_BUCKET }}/apk/BAJPDownloader-MITM.apk.hash --checksum-algorithm CRC32
          aws s3 cp BAJPDownloader-MITM.apk s3://${{ secrets.R2_BUCKET }}/apk/BAJPDownloader-MITM.apk --checksum-algorithm CRC32
       - name: Purge Cloudflare Cache
