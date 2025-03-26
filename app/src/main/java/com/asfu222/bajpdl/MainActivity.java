@@ -470,23 +470,26 @@ public class MainActivity extends AppCompatActivity {
                 if (packageInfo != null) {
                     updateConsole("APK安装成功");
                     synchronized (installCallbackStack) {
-                        for (Consumer<Boolean> installCallback : installCallbackStack) {
+                        Consumer<Boolean> installCallback;
+                        while (!installCallbackStack.isEmpty() && (installCallback = installCallbackStack.pop()) != null) {
                             installCallback.accept(true);
                         }
                     }
                 } else {
                     updateConsole("APK安装失败");
                     synchronized (installCallbackStack) {
-                        for (Consumer<Boolean> installCallback : installCallbackStack) {
-                            installCallback.accept(false);
+                        Consumer<Boolean> installCallback;
+                        while (!installCallbackStack.isEmpty() && (installCallback = installCallbackStack.pop()) != null) {
+                            installCallback.accept(true);
                         }
                     }
                 }
             } catch (PackageManager.NameNotFoundException e) {
                 updateConsole("APK安装失败");
                 synchronized (installCallbackStack) {
-                    for (Consumer<Boolean> installCallback : installCallbackStack) {
-                        installCallback.accept(false);
+                    Consumer<Boolean> installCallback;
+                    while (!installCallbackStack.isEmpty() && (installCallback = installCallbackStack.pop()) != null) {
+                        installCallback.accept(true);
                     }
                 }
             }
@@ -500,23 +503,26 @@ public class MainActivity extends AppCompatActivity {
                 if (packageInfo != null) {
                     updateConsole("APK卸载失败");
                     synchronized (uninstallCallbackStack) {
-                        for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
+                        Consumer<Boolean> uninstallCallback;
+                        while (!uninstallCallbackStack.isEmpty() && (uninstallCallback = uninstallCallbackStack.pop()) != null) {
                             uninstallCallback.accept(false);
                         }
                     }
                 } else {
                     updateConsole("APK卸载成功");
                     synchronized (uninstallCallbackStack) {
-                        for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
-                            uninstallCallback.accept(true);
+                        Consumer<Boolean> uninstallCallback;
+                        while (!uninstallCallbackStack.isEmpty() && (uninstallCallback = uninstallCallbackStack.pop()) != null) {
+                            uninstallCallback.accept(false);
                         }
                     }
                 }
             } catch (PackageManager.NameNotFoundException e) {
                 updateConsole("APK卸载成功");
                 synchronized (uninstallCallbackStack) {
-                    for (Consumer<Boolean> uninstallCallback : uninstallCallbackStack) {
-                        uninstallCallback.accept(true);
+                    Consumer<Boolean> uninstallCallback;
+                    while (!uninstallCallbackStack.isEmpty() && (uninstallCallback = uninstallCallbackStack.pop()) != null) {
+                        uninstallCallback.accept(false);
                     }
                 }
             }
