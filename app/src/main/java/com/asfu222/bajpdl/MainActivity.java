@@ -1,5 +1,6 @@
 package com.asfu222.bajpdl;
 
+import android.content.ActivityNotFoundException;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
@@ -141,6 +142,10 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if ("com.asfu222.bajpdl.OPEN_BA".equals(getIntent().getAction())) {
+            openBlueArchive();
+            return;
+        }
         setContentView(R.layout.activity_main);
         serverUrlsInput = findViewById(R.id.serverUrlsInput);
         Switch redownloadSwitch = findViewById(R.id.redownloadSwitch);
@@ -217,16 +222,29 @@ public class MainActivity extends AppCompatActivity {
             runOnUiThread(() -> installAPKButton.setEnabled(false));
             updateConsole("正在获取APK，请稍等...");
             if (gameFileManager.getAppConfig().shouldUseMITM()) {
-                gameFileManager.downloadServerAPKs().thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("mitmserver.apk", result -> {
+                gameFileManager.downloadSingleAPK("https://cdn.bluearchive.me/apk/BAJPDownloader-MITM.apk").thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("BAJPDownloader-MITM.apk", result -> {
                     if (result) {
-                        updateConsole("安装MITM服务成功");
-                        installAPKButton.setText("安装游戏客户端");
+                        updateConsole("安装MITM版下载器成功");
+                        try {
+                            for (int i = 0; i < 5; i++) {
+                                if (isAuto) {
+                                    Intent intent = new Intent();
+                                    intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", MainActivity.class.getName()));
+                                    intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                    intent.setAction("com.asfu222.bajpdl.SHORTCUT");
+                                    try {
+                                        startActivity(intent);
+                                    } catch (ActivityNotFoundException ignored) {}
+                                }
+                                Thread.sleep(250);
+                            }
+                        } catch (InterruptedException ignored) {}
                     } else {
-                        updateConsole("安装MITM服务失败");
+                        updateConsole("安装MITM版下载器失败");
                     }
                 })));
             } else {
-                gameFileManager.downloadServerAPKs().thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("蔚蓝档案.apk", result -> {
+                gameFileManager.downloadSingleAPK("https://cdn.bluearchive.me/apk/蔚蓝档案.apk").thenRun(() -> runOnUiThread(() -> installAPKButton.setEnabled(true))).thenRun(() -> requestInstallPerms(() -> installAPKFromCache("蔚蓝档案.apk", result -> {
                     if (result) {
                         updateConsole("安装游戏客户端成功");
                         updateDownloadAPKButtonText();
@@ -258,7 +276,6 @@ public class MainActivity extends AppCompatActivity {
                     openBA.setChecked(true);
                     downloadCustomOnlySwitch.setChecked(true);
                     if (!EscalatedFS.canReadWriteAndroidData()) {
-                        onGrantEscalatedPermission.push(this::startDownloads);
                         redownloadSwitch.setChecked(false);
                         if (!useMITMSwitch.isChecked()) useMITMSwitch.setChecked(true);
                         else setupEscalatedPermissions();
@@ -292,7 +309,7 @@ public class MainActivity extends AppCompatActivity {
     private void updateDownloadAPKButtonText() {
         runOnUiThread(() -> {
             if (gameFileManager.getAppConfig().shouldUseMITM()) {
-                installAPKButton.setText("安装MITM服务");
+                installAPKButton.setText("安装MITM版下载器");
             } else {
                 installAPKButton.setText("安装游戏客户端");
             }
@@ -312,7 +329,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void openBlueArchive() {
-        if ("com.YostarJP.BlueArchive".equals(getPackageName()) || (gameFileManager.getAppConfig().shouldUseMITM())) {
+        if ("com.YostarJP.BlueArchive".equals(getPackageName())) {
             installCallbackStack.push(s -> {
                 if (s) {
                     openBlueArchive();
@@ -322,7 +339,12 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         Intent intent = new Intent();
-        intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", "com.yostarjp.bluearchive.MxUnityPlayerActivity"));
+        if ("com.asfu222.bajpdl".equals(getPackageName())) {
+            intent.setComponent(new ComponentName("com.YostarJP.BlueArchive", "com.yostarjp.bluearchive.MxUnityPlayerActivity"));
+        } else {
+            intent.setComponent(new ComponentName("com.asfu222.bajpdl", "com.asfu222.bajpdl.MainActivity"));
+            intent.setAction("com.asfu222.bajpdl.OPEN_BA");
+        }
         intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         startActivity(intent);
         System.runFinalization();
